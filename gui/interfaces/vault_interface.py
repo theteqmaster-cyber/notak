@@ -2,39 +2,48 @@ import os
 import subprocess
 import datetime
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QInputDialog, QFileDialog
 
 from qfluentwidgets import (ScrollArea, TitleLabel, SubtitleLabel, PrimaryPushButton,
                             StrongBodyLabel, CardWidget, IconWidget, FluentIcon as FIF,
-                            InfoBar, InfoBarPosition, SegmentedWidget, BodyLabel, MessageBoxBase, LineEdit)
+                            InfoBar, InfoBarPosition, SegmentedWidget, BodyLabel, MessageBoxBase, LineEdit,
+                            RoundMenu, Action, MenuAnimationType, MessageBox)
 
-from core.database import get_all_courses, get_connection, insert_file, check_duplicate_hash
+from core.database import (get_all_courses, get_connection, insert_file, 
+                           check_duplicate_hash, delete_file_by_path, mark_as_deleted, 
+                           restore_file_by_path)
 from core.importer import process_file_import, VAULT_DIR, get_file_hash, split_filename_for_display
 
 def get_files_for_course(course: str):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM files WHERE course = ? ORDER BY created_at DESC", (course,))
+    cursor.execute("""
+        SELECT * FROM files 
+        WHERE course = ? AND deleted_at IS NULL 
+        ORDER BY created_at DESC
+    """, (course,))
     res = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return res
 
 class ClickableCardWidget(CardWidget):
+    deleted = Signal()
+    
     def __init__(self, file_path, parent=None):
         super().__init__(parent)
         self.file_path = file_path
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet("""
             ClickableCardWidget {
-                background: rgba(0, 0, 0, 0.5);
-                border: 1px solid rgba(255, 255, 255, 0.1);
+                background: rgba(0, 0, 0, 0.8);
+                border: 1px solid rgba(255, 255, 255, 0.15);
                 border-radius: 10px;
             }
             ClickableCardWidget:hover {
-                background: rgba(0, 0, 0, 0.7);
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: rgba(0, 0, 0, 0.9);
+                border: 1px solid rgba(255, 255, 255, 0.25);
             }
         """)
 
@@ -44,6 +53,74 @@ class ClickableCardWidget(CardWidget):
             subprocess.Popen(['xdg-open', self.file_path])
         except Exception as e:
             print(f"Error opening file: {e}")
+
+    def contextMenuEvent(self, event):
+        menu = RoundMenu(parent=self)
+        
+        # Determine if we are in recycle bin or normal view
+        is_in_bin = False
+        p = self.parent()
+        while p:
+            if hasattr(p, 'objectName') and p.objectName() == "RecycleBinInterface":
+                is_in_bin = True
+                break
+            p = p.parent()
+        
+        open_folder_action = Action(FIF.FOLDER, "Open Folder")
+        open_folder_action.triggered.connect(self.open_folder)
+        menu.addAction(open_folder_action)
+        
+        if is_in_bin:
+            restore_action = Action(FIF.SYNC, "Restore")
+            restore_action.triggered.connect(self.request_restore)
+            menu.addAction(restore_action)
+            
+            delete_action = Action(FIF.DELETE, "Delete Permanent", self)
+            delete_action.triggered.connect(self.request_permanent_delete)
+            menu.addAction(delete_action)
+        else:
+            delete_action = Action(FIF.DELETE, "Move to Recycle Bin", self)
+            delete_action.triggered.connect(self.request_bin)
+            menu.addAction(delete_action)
+        
+        menu.exec(event.globalPos(), aniType=MenuAnimationType.DROP_DOWN)
+
+    def request_bin(self):
+        title = "Move to Recycle Bin"
+        content = f"Move '{os.path.basename(self.file_path)}' to the Recycle Bin? It will be permanently deleted after 30 days."
+        w = MessageBox(title, content, self.window())
+        if w.exec():
+            mark_as_deleted(self.file_path)
+            self.deleted.emit()
+
+    def request_restore(self):
+        restore_file_by_path(self.file_path)
+        self.deleted.emit()
+
+    def request_permanent_delete(self):
+        title = "Permanent Deletion"
+        content = f"Are you sure you want to delete '{os.path.basename(self.file_path)}' permanently? This cannot be undone."
+        w = MessageBox(title, content, self.window())
+        if w.exec():
+            try:
+                if os.path.exists(self.file_path):
+                    os.remove(self.file_path)
+                delete_file_by_path(self.file_path)
+                self.deleted.emit()
+            except Exception as e:
+                print(f"Error during deletion: {e}")
+
+    def open_folder(self):
+        folder = os.path.dirname(self.file_path)
+        if os.path.exists(folder):
+            try:
+                subprocess.Popen(['xdg-open', folder])
+            except Exception as e:
+                print(f"Error opening folder: {e}")
+
+    def request_delete(self):
+        # Legacy support if needed, redirects to bin
+        self.request_bin()
 
 class VaultInterface(QWidget):
     def __init__(self, parent=None):
@@ -62,15 +139,32 @@ class VaultInterface(QWidget):
         self.title_label = TitleLabel("My Vault", self)
         self.title_label.setStyleSheet("font-weight: bold;")
         
-        self.course_tabs = SegmentedWidget(self)
+        # Scrollable container for courses
+        self.tabs_scroll = ScrollArea(self)
+        self.tabs_scroll.setWidgetResizable(True)
+        self.tabs_scroll.setFixedHeight(50)
+        self.tabs_scroll.setFrameShape(ScrollArea.NoFrame)
+        self.tabs_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.tabs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.tabs_scroll.setStyleSheet("background: transparent; border: none;")
+        
+        self.tabs_container = QWidget()
+        self.tabs_container.setStyleSheet("background: transparent;")
+        self.tabs_layout = QHBoxLayout(self.tabs_container)
+        self.tabs_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.course_tabs = SegmentedWidget(self.tabs_container)
         self.course_tabs.currentItemChanged.connect(self.on_course_changed)
+        self.tabs_layout.addWidget(self.course_tabs)
+        
+        self.tabs_scroll.setWidget(self.tabs_container)
         
         self.btn_new_course = PrimaryPushButton(FIF.ADD, "New Course", self)
         self.btn_new_course.clicked.connect(self.add_new_course)
         
         header_layout.addWidget(self.title_label)
         header_layout.addStretch(1)
-        header_layout.addWidget(self.course_tabs)
+        header_layout.addWidget(self.tabs_scroll)
         header_layout.addSpacing(10)
         header_layout.addWidget(self.btn_new_course)
         
@@ -120,7 +214,7 @@ class VaultInterface(QWidget):
         self.load_courses()
 
     def load_courses(self):
-        courses = get_all_courses()
+        courses = [c for c in get_all_courses() if c != "Notei"]
         
         self.course_tabs.clear()
         
@@ -183,6 +277,7 @@ class VaultInterface(QWidget):
             card = ClickableCardWidget(f['path'], self)
             card.setFixedSize(160, 210)
             card.setCursor(Qt.PointingHandCursor)
+            card.deleted.connect(lambda: self.refresh_gallery(course))
             
             c_layout = QVBoxLayout(card)
             c_layout.setContentsMargins(15, 20, 15, 15)

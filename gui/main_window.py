@@ -1,7 +1,7 @@
 import os
 import sys
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QTimer, QTime
 from PySide6.QtGui import QIcon, QPixmap, QPalette, QBrush
 from PySide6.QtWidgets import QApplication, QLabel
 
@@ -13,11 +13,19 @@ from gui.interfaces.home_interface import HomeInterface
 from gui.interfaces.vault_interface import VaultInterface
 from gui.interfaces.calendar_interface import CalendarInterface
 from gui.interfaces.music_interface import MusicInterface
+from gui.interfaces.notei_interface import NoteiInterface
+from gui.interfaces.recycle_bin_interface import RecycleBinInterface
+from gui.interfaces.search_interface import DeepSearchInterface
+from gui.interfaces.about_interface import AboutInterface
+from gui.interfaces.games_interface import GamesInterface
+from core.database import initialize_db, purge_old_deleted_items
 
 class MainWindow(FluentWindow):
 
     def __init__(self):
         super().__init__()
+        initialize_db()
+        purge_old_deleted_items(30)
         self.initWindow()
 
         # Background Layer
@@ -32,9 +40,24 @@ class MainWindow(FluentWindow):
         self.vaultInterface = VaultInterface(self)
         self.calendarInterface = CalendarInterface(self)
         self.musicInterface = MusicInterface(self)
+        self.noteiInterface = NoteiInterface(self)
+        self.recycleBinInterface = RecycleBinInterface(self)
+        self.searchInterface = DeepSearchInterface(self)
+        self.aboutInterface = AboutInterface(self)
+        self.gamesInterface = GamesInterface(self)
+        
+        # Title bar clock
+        self.title_clock = SubtitleLabel(QTime.currentTime().toString("HH:mm"), self)
+        self.title_clock.setStyleSheet("color: rgba(255, 255, 255, 0.5); font-size: 14px; margin-left: 20px;")
+        self.titleBar.layout().insertWidget(1, self.title_clock)
+        
+        self.clock_timer = QTimer(self)
+        self.clock_timer.timeout.connect(self.update_title_clock)
+        self.clock_timer.start(30000) # Update every 30s
         
         # Connect signals
         self.homeInterface.backgroundChanged.connect(self.setBackgroundImage)
+        self.homeInterface.searchRequested.connect(self.handle_search_request)
 
         # Wire up navigation
         self.initNavigation()
@@ -46,10 +69,17 @@ class MainWindow(FluentWindow):
         # add navigation items to sidebar
         self.addSubInterface(self.homeInterface, FIF.HOME, 'Dashboard', NavigationItemPosition.TOP)
         self.addSubInterface(self.vaultInterface, FIF.FOLDER, 'My Vault', NavigationItemPosition.TOP)
+        self.addSubInterface(self.searchInterface, FIF.SEARCH, 'Deep Search', NavigationItemPosition.TOP)
         self.addSubInterface(self.calendarInterface, FIF.CALENDAR, 'Study Calendar', NavigationItemPosition.TOP)
         self.addSubInterface(self.musicInterface, FIF.MUSIC, 'Music Hub', NavigationItemPosition.TOP)
-
-        # Bottom settings or about could go here
+        self.addSubInterface(self.noteiInterface, FIF.EDIT, 'Notei', NavigationItemPosition.TOP)
+        
+        self.navigationInterface.addSeparator() # Visual separation for non-study tools
+        
+        self.addSubInterface(self.gamesInterface, FIF.GAME, 'Games Haven', NavigationItemPosition.TOP)
+        
+        self.addSubInterface(self.recycleBinInterface, FIF.DELETE, 'Recycle Bin', NavigationItemPosition.TOP)
+        self.addSubInterface(self.aboutInterface, FIF.INFO, 'About Notak', NavigationItemPosition.TOP)
         
         # Adjust aesthetics
         self.navigationInterface.setAcrylicEnabled(False)
@@ -108,3 +138,13 @@ class MainWindow(FluentWindow):
                         self.setBackgroundImage(path)
             except:
                 pass
+
+    def handle_search_request(self, text):
+        # Switch to search interface
+        self.switchTo(self.searchInterface)
+        if text:
+            self.searchInterface.search_bar.setText(text)
+            self.searchInterface.on_search_changed(text)
+
+    def update_title_clock(self):
+        self.title_clock.setText(QTime.currentTime().toString("HH:mm"))

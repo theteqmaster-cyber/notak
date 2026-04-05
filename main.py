@@ -2,13 +2,16 @@ import sys
 import os
 os.environ["QT_API"] = "pyside6"
 os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 # Ensure the core database exists and is initialized
 from core.database import initialize_db
 
 def main():
-    # 1. Create Application Context
+    # 1. Lock DPI Scaling before creating Application Context
+    QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    
     app = QApplication(sys.argv)
     app.setStyle("Fusion") 
 

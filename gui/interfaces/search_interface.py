@@ -1,81 +1,83 @@
 import os
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+import subprocess
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout
 
-from qfluentwidgets import (ScrollArea, TitleLabel, SubtitleLabel, SearchLineEdit, 
-                            StrongBodyLabel, CardWidget, IconWidget, FluentIcon as FIF,
-                            BodyLabel)
+from qfluentwidgets import (ScrollArea, TitleLabel, SearchLineEdit, 
+                            SubtitleLabel, IconWidget, FluentIcon as FIF,
+                            BodyLabel, CardWidget)
 
 from core.database import search_files
 from core.importer import split_filename_for_display
 
 class SearchResultCard(CardWidget):
-    def __init__(self, result_dict, parent=None):
+    clicked = Signal(str)
+    
+    def __init__(self, file_data, parent=None):
         super().__init__(parent)
-        self.result = result_dict
-        self.setFixedHeight(120)
+        self.file_path = file_data['path']
+        self.setCursor(Qt.PointingHandCursor)
+        
+        self.v_layout = QVBoxLayout(self)
+        self.v_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Header: Icon and Name
+        self.h_header = QHBoxLayout()
+        
+        icon = FIF.DOCUMENT
+        if file_data['category'] == 'PDFs': icon = FIF.CALENDAR
+        elif file_data['category'] == 'Images': icon = FIF.PHOTO
+        elif file_data['category'] == 'Notes': icon = FIF.EDIT
+        
+        self.icon_widget = IconWidget(icon)
+        self.icon_widget.setFixedSize(24, 24)
+        self.h_header.addWidget(self.icon_widget)
+        
+        basename = os.path.basename(self.file_path)
+        display_name, _ = split_filename_for_display(basename)
+        
+        self.name_lbl = BodyLabel(display_name)
+        self.name_lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.h_header.addWidget(self.name_lbl)
+        self.h_header.addStretch(1)
+        
+        # Course Tag
+        self.course_lbl = CaptionLabel(file_data['course'])
+        self.course_lbl.setStyleSheet("color: #0078d4; background: rgba(0, 120, 212, 0.1); padding: 2px 8px; border-radius: 4px;")
+        self.h_header.addWidget(self.course_lbl)
+        
+        self.v_layout.addLayout(self.h_header)
+        
+        # Snippet
+        snippet_text = file_data.get('snippet', '')
+        if snippet_text:
+            self.snippet_lbl = BodyLabel(snippet_text)
+            self.snippet_lbl.setWordWrap(True)
+            self.snippet_lbl.setStyleSheet("color: #aaaaaa; font-size: 12px; margin-top: 5px;")
+            self.v_layout.addWidget(self.snippet_lbl)
+            
         self.setStyleSheet("""
             SearchResultCard {
-                background: rgba(0, 0, 0, 0.5);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
+                background: rgba(0, 0, 0, 0.7);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 8px;
             }
             SearchResultCard:hover {
-                background: rgba(0, 0, 0, 0.7);
+                background: rgba(255, 255, 255, 0.1);
                 border: 1px solid rgba(255, 255, 255, 0.2);
             }
         """)
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 15, 20, 15)
-        
-        top_layout = QHBoxLayout()
-        icon = FIF.DOCUMENT
-        cat = self.result['category']
-        if cat == 'PDFs': icon = FIF.CALENDAR
-        elif cat == 'Images': icon = FIF.PHOTO
-        elif cat == 'Notes': icon = FIF.EDIT
-            
-        icon_widget = IconWidget(icon)
-        icon_widget.setFixedSize(24, 24)
-        top_layout.addWidget(icon_widget)
-        
-        title_layout = QVBoxLayout()
-        basename = os.path.basename(self.result['path'])
-        display_name, suffix = split_filename_for_display(basename)
-        
-        name = StrongBodyLabel(display_name)
-        title_layout.addWidget(name)
-        if suffix:
-            suf_lbl = SubtitleLabel(suffix)
-            suf_lbl.setStyleSheet("font-size: 10px; color: #777;")
-            title_layout.addWidget(suf_lbl)
-            
-        top_layout.addLayout(title_layout)
-        top_layout.addStretch(1)
-        
-        course_lbl = SubtitleLabel(f"{self.result['course']} | {cat}")
-        course_lbl.setStyleSheet("font-size: 11px; color: #888;")
-        top_layout.addWidget(course_lbl)
-        
-        layout.addLayout(top_layout)
-        
-        # Snippet processing
-        snippet = self.result['text_content']
-        # Very simple truncation
-        if len(snippet) > 200:
-            snippet = snippet[:200] + "..."
-            
-        # Optional: very simplistic highlight (Fluent UI parses rich text if we enable it, but plain text is safer for large dumps)
-        desc = BodyLabel(snippet)
-        desc.setWordWrap(True)
-        desc.setStyleSheet("color: #b0b0b0; font-size: 13px;")
-        layout.addWidget(desc)
 
-class SearchInterface(QWidget):
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self.file_path)
+
+from qfluentwidgets import CaptionLabel
+
+class DeepSearchInterface(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.setObjectName("SearchInterface")
+        self.setObjectName("DeepSearchInterface")
         self.setStyleSheet("background: transparent;")
         
         self.vBoxLayout = QVBoxLayout(self)
@@ -83,59 +85,69 @@ class SearchInterface(QWidget):
         self.vBoxLayout.setSpacing(20)
         self.vBoxLayout.setAlignment(Qt.AlignTop)
         
+        # Header
         self.title_label = TitleLabel("Deep Search", self)
-        
-        self.search_bar = SearchLineEdit(self)
-        self.search_bar.setPlaceholderText("Search exact phrases in PDFs, Notes, and OCR Images...")
-        self.search_bar.setMinimumWidth(500)
-        self.search_bar.returnPressed.connect(self.perform_search)
-        self.search_bar.searchSignal.connect(self.perform_search)
-        
-        self.results_info = SubtitleLabel("Hit enter to search across your entire vault.", self)
-        self.results_info.setStyleSheet("color: #888;")
-        
+        self.title_label.setStyleSheet("font-weight: bold;")
         self.vBoxLayout.addWidget(self.title_label)
-        self.vBoxLayout.addSpacing(10)
+        
+        self.sub_label = BodyLabel("Search through all your notes and study materials instantly.")
+        self.sub_label.setStyleSheet("color: #888;")
+        self.vBoxLayout.addWidget(self.sub_label)
+        
+        # Search Bar
+        self.search_bar = SearchLineEdit(self)
+        self.search_bar.setPlaceholderText("Search for keywords (e.g., 'database indexing')")
+        self.search_bar.setClearButtonEnabled(True)
+        self.search_bar.setFixedWidth(500)
+        self.search_bar.textChanged.connect(self.on_search_changed)
         self.vBoxLayout.addWidget(self.search_bar)
-        self.vBoxLayout.addWidget(self.results_info)
-        self.vBoxLayout.addSpacing(20)
+        
+        self.vBoxLayout.addSpacing(10)
         
         # Results Area
         self.scroll_area = ScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("ScrollArea { background-color: transparent; border: none; }")
         
-        self.results_widget = QWidget()
-        self.results_widget.setStyleSheet("background-color: transparent;")
-        
-        self.results_layout = QVBoxLayout(self.results_widget)
+        self.results_container = QWidget()
+        self.results_layout = QVBoxLayout(self.results_container)
+        self.results_layout.setSpacing(10)
         self.results_layout.setAlignment(Qt.AlignTop)
-        self.results_layout.setSpacing(15)
         
-        self.scroll_area.setWidget(self.results_widget)
+        self.scroll_area.setWidget(self.results_container)
         self.vBoxLayout.addWidget(self.scroll_area)
+        
+        self.results_info = BodyLabel("", self)
+        self.results_info.setStyleSheet("color: #666;")
+        self.vBoxLayout.addWidget(self.results_info)
 
-    def perform_search(self):
-        query = self.search_bar.text().strip()
+    def on_search_changed(self, text):
+        query = text.strip()
         if not query:
+            self.clear_results()
+            self.results_info.setText("")
             return
             
-        self.results_info.setText(f"Searching for '{query}'...")
-        
-        # Clear existing
-        for i in reversed(range(self.results_layout.count())): 
+        results = search_files(query)
+        self.display_results(results)
+        self.results_info.setText(f"Found {len(results)} matches.")
+
+    def clear_results(self):
+        for i in reversed(range(self.results_layout.count())):
             widget = self.results_layout.itemAt(i).widget()
             if widget:
                 widget.deleteLater()
-                
-        results = search_files(query)
-        
-        if not results:
-            self.results_info.setText(f"No results found for '{query}'.")
-            return
-            
-        self.results_info.setText(f"Found {len(results)} exact matches for '{query}'.")
+
+    def display_results(self, results):
+        self.clear_results()
         
         for res in results:
-            card = SearchResultCard(res, self.results_widget)
+            card = SearchResultCard(res, self)
+            card.clicked.connect(self.open_result)
             self.results_layout.addWidget(card)
+
+    def open_result(self, path):
+        try:
+            subprocess.Popen(['xdg-open', path])
+        except Exception as e:
+            print(f"Error opening result: {e}")
