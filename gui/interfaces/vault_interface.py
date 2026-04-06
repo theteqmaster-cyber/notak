@@ -4,10 +4,10 @@ import datetime
 
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QInputDialog, QFileDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QInputDialog, QFileDialog, QLabel
 
-from qfluentwidgets import (ScrollArea, TitleLabel, SubtitleLabel, PrimaryPushButton,
-                            StrongBodyLabel, CardWidget, IconWidget, FluentIcon as FIF,
+from qfluentwidgets import (ScrollArea, TitleLabel, SubtitleLabel, PrimaryPushButton, PushButton,
+                            StrongBodyLabel, CardWidget, IconWidget, FluentIcon as FIF, SearchLineEdit,
                             InfoBar, InfoBarPosition, SegmentedWidget, BodyLabel, MessageBoxBase, LineEdit,
                             RoundMenu, Action, MenuAnimationType, MessageBox)
 
@@ -31,20 +31,31 @@ def get_files_for_course(course: str):
 class ClickableCardWidget(CardWidget):
     deleted = Signal()
     
-    def __init__(self, file_path, parent=None):
+    def __init__(self, file_path, category, parent=None):
         super().__init__(parent)
         self.file_path = file_path
+        self.category = category
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet("""
-            ClickableCardWidget {
-                background: rgba(0, 0, 0, 0.8);
-                border: 1px solid rgba(255, 255, 255, 0.15);
+        
+        # Color coding for accent
+        accent_color = "rgba(255, 255, 255, 0.15)" # Default subtle border
+        if self.category == 'PDFs': accent_color = "#E74C3C"  # Red
+        elif self.category == 'Notes': accent_color = "#3498DB" # Blue
+        elif self.category == 'Images': accent_color = "#2ECC71" # Green
+        elif self.category == 'Slides': accent_color = "#F39C12" # Orange
+        
+        self.setStyleSheet(f"""
+            ClickableCardWidget {{
+                background: rgba(20, 20, 25, 0.7);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-top: 4px solid {accent_color};
                 border-radius: 10px;
-            }
-            ClickableCardWidget:hover {
-                background: rgba(0, 0, 0, 0.9);
-                border: 1px solid rgba(255, 255, 255, 0.25);
-            }
+            }}
+            ClickableCardWidget:hover {{
+                background: rgba(40, 40, 45, 0.85);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-top: 4px solid {accent_color};
+            }}
         """)
 
     def mouseDoubleClickEvent(self, event):
@@ -130,20 +141,18 @@ class VaultInterface(QWidget):
         self.setAcceptDrops(True)
         
         self.vBoxLayout = QVBoxLayout(self)
-        self.vBoxLayout.setContentsMargins(40, 40, 40, 40)
-        self.vBoxLayout.setSpacing(20)
+        self.vBoxLayout.setContentsMargins(40, 30, 40, 30)
+        self.vBoxLayout.setSpacing(25)
         self.vBoxLayout.setAlignment(Qt.AlignTop)
         
-        # Header Area
-        header_layout = QHBoxLayout()
-        self.title_label = TitleLabel("My Vault", self)
-        self.title_label.setStyleSheet("font-weight: bold;")
+        # --- 1. TOP NAVIGATION (Tabs) ---
+        top_nav_layout = QHBoxLayout()
+        top_nav_layout.setAlignment(Qt.AlignLeft)
         
-        # Scrollable container for courses
         self.tabs_scroll = ScrollArea(self)
         self.tabs_scroll.setWidgetResizable(True)
-        self.tabs_scroll.setMinimumHeight(65)
-        self.tabs_scroll.setMaximumHeight(80)
+        self.tabs_scroll.setMinimumHeight(45)
+        self.tabs_scroll.setMaximumHeight(50)
         self.tabs_scroll.setFrameShape(ScrollArea.NoFrame)
         self.tabs_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.tabs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -157,47 +166,74 @@ class VaultInterface(QWidget):
         self.course_tabs = SegmentedWidget(self.tabs_container)
         self.course_tabs.currentItemChanged.connect(self.on_course_changed)
         self.tabs_layout.addWidget(self.course_tabs)
-        
         self.tabs_scroll.setWidget(self.tabs_container)
         
-        self.btn_new_course = PrimaryPushButton(FIF.ADD, "New Course", self)
+        self.btn_new_course = PushButton(FIF.ADD, "New Course", self)
         self.btn_new_course.clicked.connect(self.add_new_course)
         
-        header_layout.addWidget(self.title_label)
-        header_layout.addStretch(1)
-        header_layout.addWidget(self.tabs_scroll)
-        header_layout.addSpacing(10)
-        header_layout.addWidget(self.btn_new_course)
+        top_nav_layout.addWidget(self.tabs_scroll)
+        top_nav_layout.addSpacing(15)
+        top_nav_layout.addWidget(self.btn_new_course)
         
-        self.vBoxLayout.addLayout(header_layout)
+        self.vBoxLayout.addLayout(top_nav_layout)
         
-        # Action Bar Area
-        self.actions_layout = QHBoxLayout()
-        self.actions_layout.setSpacing(15)
-        self.actions_layout.setAlignment(Qt.AlignLeft)
+        # --- 2. HERO DASHBOARD BANNER ---
+        self.hero_widget = QWidget(self)
+        self.hero_widget.setFixedHeight(120)
+        self.hero_widget.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(50, 50, 65, 0.8), stop:1 rgba(25, 25, 35, 0.9));
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+        """)
+        hero_layout = QHBoxLayout(self.hero_widget)
+        hero_layout.setContentsMargins(35, 20, 35, 20)
         
-        self.btn_note = PrimaryPushButton(FIF.EDIT, "Take Note", self)
+        # Left side: Text
+        text_layout = QVBoxLayout()
+        text_layout.setAlignment(Qt.AlignVCenter)
+        self.course_title_label = QLabel("Select a Course...", self.hero_widget)
+        self.course_title_label.setStyleSheet("font-size: 28px; font-weight: bold; color: white; background: transparent; border: none;")
+        self.stats_label = QLabel("0 Files • Ready to start studying", self.hero_widget)
+        self.stats_label.setStyleSheet("font-size: 14px; color: #b0b0b0; background: transparent; border: none;")
+        
+        text_layout.addWidget(self.course_title_label)
+        text_layout.addWidget(self.stats_label)
+        hero_layout.addLayout(text_layout)
+        hero_layout.addStretch(1)
+        
+        # Right side: Actions integrated cleanly
+        self.btn_note = PrimaryPushButton(FIF.EDIT, "Take Note", self.hero_widget)
         self.btn_note.clicked.connect(self.take_note)
-        
-        self.btn_import = PrimaryPushButton(FIF.DOWNLOAD, "Import Files", self)
+        self.btn_import = PushButton(FIF.DOWNLOAD, "Import PDF/Files", self.hero_widget)
         self.btn_import.clicked.connect(self.import_files_dialog)
+        self.btn_refresh = PushButton(FIF.SYNC, "Refresh", self.hero_widget)
+        self.btn_refresh.clicked.connect(lambda: self.refresh_gallery(self.current_course(), self.search_bar.text()))
         
-        self.btn_refresh = PrimaryPushButton(FIF.SYNC, "Refresh", self)
-        self.btn_refresh.clicked.connect(lambda: self.refresh_gallery(self.current_course()))
+        button_style = "padding: 8px 16px; font-weight: bold;"
+        self.btn_note.setStyleSheet(button_style)
+        self.btn_import.setStyleSheet(button_style)
+        self.btn_refresh.setStyleSheet(button_style)
+
+        hero_layout.addWidget(self.btn_note)
+        hero_layout.addWidget(self.btn_import)
+        hero_layout.addWidget(self.btn_refresh)
         
-        self.actions_layout.addWidget(self.btn_note)
-        self.actions_layout.addWidget(self.btn_import)
-        self.actions_layout.addWidget(self.btn_refresh)
+        self.vBoxLayout.addWidget(self.hero_widget)
         
-        self.vBoxLayout.addLayout(self.actions_layout)
+        # --- 3. LOCAL SEARCH BAR ---
+        filter_layout = QHBoxLayout()
+        self.search_bar = SearchLineEdit(self)
+        self.search_bar.setPlaceholderText("Filter files instantly within this course...")
+        self.search_bar.setMinimumWidth(350)
+        self.search_bar.setClearButtonEnabled(True)
+        self.search_bar.textChanged.connect(lambda t: self.refresh_gallery(self.current_course(), t))
+        filter_layout.addWidget(self.search_bar)
+        filter_layout.addStretch(1)
+        self.vBoxLayout.addLayout(filter_layout)
         
-        self.sub_header = BodyLabel("Drop files anywhere, or use the buttons above to add resources.", self)
-        self.sub_header.setStyleSheet("color: #aaaaaa;")
-        self.vBoxLayout.addWidget(self.sub_header)
-        
-        self.vBoxLayout.addSpacing(20)
-        
-        # Gallery Area
+        # --- 4. GALLERY AREA ---
         self.scroll_area = ScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("ScrollArea { background-color: transparent; border: none; }")
@@ -207,7 +243,7 @@ class VaultInterface(QWidget):
         
         self.gallery_layout = QGridLayout(self.gallery_widget)
         self.gallery_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        self.gallery_layout.setSpacing(20)
+        self.gallery_layout.setSpacing(25)
         
         self.scroll_area.setWidget(self.gallery_widget)
         self.vBoxLayout.addWidget(self.scroll_area)
@@ -241,12 +277,12 @@ class VaultInterface(QWidget):
     def take_note(self):
         from gui.zen_writer import ZenWriter
         self.writer = ZenWriter(self.current_course())
-        self.writer.saveCompleted.connect(lambda: self.refresh_gallery(self.current_course()))
+        self.writer.saveCompleted.connect(lambda: self.refresh_gallery(self.current_course(), self.search_bar.text()))
         self.writer.show()
 
     def showEvent(self, event):
         super().showEvent(event)
-        self.refresh_gallery(self.current_course())
+        self.refresh_gallery(self.current_course(), self.search_bar.text())
                 
     def import_files_dialog(self):
         file_paths, _ = QFileDialog.getOpenFileNames(self, "Select Files to Import", "", "All Files (*)")
@@ -255,42 +291,66 @@ class VaultInterface(QWidget):
 
     def on_course_changed(self, routeKey: str):
         self._current_course = routeKey
-        self.title_label.setText(f"Course: {routeKey}")
-        self.refresh_gallery(routeKey)
+        if self.search_bar.text() != "":
+            self.search_bar.clear() # This implicitly triggers refresh_gallery due to textChanged
+        else:
+            self.refresh_gallery(routeKey)
 
-    def refresh_gallery(self, course: str):
-        # Clear existing
-        for i in reversed(range(self.gallery_layout.count())): 
-            widget = self.gallery_layout.itemAt(i).widget()
-            if widget:
-                widget.deleteLater()
+    def refresh_gallery(self, course: str, filter_text: str = ""):
+        # Clear existing layout properly to prevent C++ invalid pointer crash
+        while self.gallery_layout.count():
+            item = self.gallery_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
                 
+        # Update Hero Title
+        self.course_title_label.setText(course)
+        
+        # Load files and calculate stats
         files = get_files_for_course(course)
+        
+        total = len(files)
+        pdfs = sum(1 for f in files if f['category'] == 'PDFs')
+        notes = sum(1 for f in files if f['category'] == 'Notes')
+        others = total - pdfs - notes
+        
+        stat_parts = []
+        if pdfs > 0: stat_parts.append(f"{pdfs} PDFs")
+        if notes > 0: stat_parts.append(f"{notes} Notes")
+        if others > 0: stat_parts.append(f"{others} Others")
+        
+        stat_str = " • ".join(stat_parts) if stat_parts else "Upload files to get started."
+        self.stats_label.setText(f"{total} Total Documents | {stat_str}")
+        
         if not files:
-            empty = SubtitleLabel("No files here yet. Drag and Drop to import.", self)
-            empty.setStyleSheet("color: #555;")
+            empty = SubtitleLabel("No files here yet. Drag and Drop to visually import them.", self)
+            empty.setStyleSheet("color: #777;")
             self.gallery_layout.addWidget(empty, 0, 0)
             return
+
+        # Apply visual filtering
+        if filter_text:
+            filter_lower = filter_text.lower()
+            files = [f for f in files if filter_lower in os.path.basename(f['path']).lower()]
 
         row, col = 0, 0
         max_cols = 5
         for f in files:
-            card = ClickableCardWidget(f['path'], self)
-            card.setFixedSize(160, 210)
-            card.setCursor(Qt.PointingHandCursor)
-            card.deleted.connect(lambda: self.refresh_gallery(course))
+            card = ClickableCardWidget(f['path'], f['category'], self)
+            card.setFixedSize(170, 220)
+            card.deleted.connect(lambda: self.refresh_gallery(self.current_course(), self.search_bar.text()))
             
             c_layout = QVBoxLayout(card)
             c_layout.setContentsMargins(15, 20, 15, 15)
             c_layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
             
             icon = FIF.DOCUMENT
-            if f['category'] == 'PDFs': icon = FIF.CALENDAR
+            if f['category'] == 'PDFs': icon = FIF.CALENDAR  # Often overridden with PDF icon later
             elif f['category'] == 'Images': icon = FIF.PHOTO
             elif f['category'] == 'Notes': icon = FIF.EDIT
             
             icon_widget = IconWidget(icon)
-            icon_widget.setFixedSize(50, 50)
+            icon_widget.setFixedSize(45, 45)
             c_layout.addWidget(icon_widget, alignment=Qt.AlignHCenter)
             
             c_layout.addSpacing(15)
@@ -301,13 +361,13 @@ class VaultInterface(QWidget):
             name = BodyLabel(display_name)
             name.setWordWrap(True)
             name.setAlignment(Qt.AlignCenter)
-            name.setStyleSheet("color: #e0e0e0; font-size: 13px; font-weight: bold;")
+            name.setStyleSheet("color: #f0f0f0; font-size: 13px; font-weight: bold;")
             c_layout.addWidget(name)
             
             if suffix:
                 suf_lbl = SubtitleLabel(suffix)
                 suf_lbl.setAlignment(Qt.AlignCenter)
-                suf_lbl.setStyleSheet("color: #777; font-size: 10px;")
+                suf_lbl.setStyleSheet("color: #888; font-size: 10px;")
                 c_layout.addWidget(suf_lbl)
             
             self.gallery_layout.addWidget(card, row, col)
@@ -319,12 +379,12 @@ class VaultInterface(QWidget):
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
-            self.sub_header.setText("Drop to Import!")
-            self.sub_header.setStyleSheet("color: #0078d7; font-weight: bold;")
+            self.search_bar.setPlaceholderText("Drop files to instantly import into this course!")
 
     def dropEvent(self, event: QDropEvent):
         urls = event.mimeData().urls()
         file_paths = [url.toLocalFile() for url in urls if os.path.isfile(url.toLocalFile())]
+        self.search_bar.setPlaceholderText("Filter files instantly within this course...")
         self._execute_import(file_paths)
         
     def _execute_import(self, file_paths):
@@ -346,22 +406,20 @@ class VaultInterface(QWidget):
                 imported_count += 1
             elif res['status'] == 'skipped':
                 skipped_count += 1
-
-        self.sub_header.setText("Drop files anywhere, or use the buttons above to add resources.")
-        self.sub_header.setStyleSheet("color: #aaaaaa;")
         
-        msg = f"Imported {imported_count} files."
+        msg = f"Successfully imported {imported_count} documents."
         if skipped_count:
-            msg += f" (Skipped {skipped_count} duplicates)"
+            msg += f" (Skipped {skipped_count} identical duplicates)"
             
-        self.refresh_gallery(target_course)
+        self.refresh_gallery(target_course, self.search_bar.text())
         
-        InfoBar.success(
-            title='Import Complete',
-            content=msg,
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP_RIGHT,
-            duration=3000,
-            parent=self
-        )
+        if imported_count > 0 or skipped_count > 0:
+            InfoBar.success(
+                title='Import Completed',
+                content=msg,
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP_RIGHT,
+                duration=3500,
+                parent=self
+            )
