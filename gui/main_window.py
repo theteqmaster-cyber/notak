@@ -18,6 +18,7 @@ from gui.interfaces.recycle_bin_interface import RecycleBinInterface
 from gui.interfaces.search_interface import DeepSearchInterface
 from gui.interfaces.about_interface import AboutInterface
 from gui.interfaces.games_interface import GamesInterface
+from gui.interfaces.radio_interface import RadioInterface
 from core.database import initialize_db, purge_old_deleted_items
 
 class MainWindow(FluentWindow):
@@ -45,6 +46,7 @@ class MainWindow(FluentWindow):
         self.searchInterface = DeepSearchInterface(self)
         self.aboutInterface = AboutInterface(self)
         self.gamesInterface = GamesInterface(self)
+        self.radioInterface = RadioInterface(self)
         
         # Title bar clock
         self.title_clock = SubtitleLabel(QTime.currentTime().toString("HH:mm"), self)
@@ -72,6 +74,7 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.searchInterface, FIF.SEARCH, 'Deep Search', NavigationItemPosition.TOP)
         self.addSubInterface(self.calendarInterface, FIF.CALENDAR, 'Study Calendar', NavigationItemPosition.TOP)
         self.addSubInterface(self.musicInterface, FIF.MUSIC, 'Music Hub', NavigationItemPosition.TOP)
+        self.addSubInterface(self.radioInterface, FIF.WIFI, 'Internet Radio', NavigationItemPosition.TOP)
         self.addSubInterface(self.noteiInterface, FIF.EDIT, 'Notei', NavigationItemPosition.TOP)
         
         self.navigationInterface.addSeparator() # Visual separation for non-study tools
