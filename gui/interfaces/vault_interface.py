@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QI
 from qfluentwidgets import (ScrollArea, TitleLabel, SubtitleLabel, PrimaryPushButton, PushButton,
                             StrongBodyLabel, CardWidget, IconWidget, FluentIcon as FIF, SearchLineEdit,
                             InfoBar, InfoBarPosition, SegmentedWidget, BodyLabel, MessageBoxBase, LineEdit,
-                            RoundMenu, Action, MenuAnimationType, MessageBox)
+                            RoundMenu, Action, MenuAnimationType, MessageBox, ComboBox)
 
 from core.database import (get_all_courses, get_connection, insert_file, 
                            check_duplicate_hash, delete_file_by_path, mark_as_deleted, 
@@ -145,35 +145,22 @@ class VaultInterface(QWidget):
         self.vBoxLayout.setSpacing(25)
         self.vBoxLayout.setAlignment(Qt.AlignTop)
         
-        # --- 1. TOP NAVIGATION (Tabs) ---
+        # --- 1. TOP NAVIGATION (Course Selector) ---
         top_nav_layout = QHBoxLayout()
         top_nav_layout.setAlignment(Qt.AlignLeft)
         
-        self.tabs_scroll = ScrollArea(self)
-        self.tabs_scroll.setWidgetResizable(True)
-        self.tabs_scroll.setMinimumHeight(45)
-        self.tabs_scroll.setMaximumHeight(50)
-        self.tabs_scroll.setFrameShape(ScrollArea.NoFrame)
-        self.tabs_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.tabs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.tabs_scroll.setStyleSheet("background: transparent; border: none;")
-        
-        self.tabs_container = QWidget()
-        self.tabs_container.setStyleSheet("background: transparent;")
-        self.tabs_layout = QHBoxLayout(self.tabs_container)
-        self.tabs_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.course_tabs = SegmentedWidget(self.tabs_container)
-        self.course_tabs.currentItemChanged.connect(self.on_course_changed)
-        self.tabs_layout.addWidget(self.course_tabs)
-        self.tabs_scroll.setWidget(self.tabs_container)
+        self.course_selector = ComboBox(self)
+        self.course_selector.setMinimumWidth(250)
+        self.course_selector.setStyleSheet("font-size: 15px; font-weight: bold;")
+        self.course_selector.currentTextChanged.connect(self.on_course_changed)
         
         self.btn_new_course = PushButton(FIF.ADD, "New Course", self)
         self.btn_new_course.clicked.connect(self.add_new_course)
         
-        top_nav_layout.addWidget(self.tabs_scroll)
+        top_nav_layout.addWidget(self.course_selector)
         top_nav_layout.addSpacing(15)
         top_nav_layout.addWidget(self.btn_new_course)
+        top_nav_layout.addStretch(1)
         
         self.vBoxLayout.addLayout(top_nav_layout)
         
@@ -253,23 +240,23 @@ class VaultInterface(QWidget):
     def load_courses(self):
         courses = [c for c in get_all_courses() if c != "Notei"]
         
-        self.course_tabs.clear()
+        self.course_selector.clear()
         
         if not courses:
             courses = ["Inbox"]
             
         for idx, course in enumerate(courses):
-            self.course_tabs.addItem(routeKey=course, text=course)
+            self.course_selector.addItem(text=course)
             
         if courses:
-            self.course_tabs.setCurrentItem(courses[0])
+            self.course_selector.setCurrentText(courses[0])
 
     def add_new_course(self):
         name, ok = QInputDialog.getText(self, "Create New Course", "Enter the new course name:")
         if ok and name.strip():
             new_course = name.strip()
-            self.course_tabs.addItem(routeKey=new_course, text=new_course)
-            self.course_tabs.setCurrentItem(new_course)
+            self.course_selector.addItem(text=new_course)
+            self.course_selector.setCurrentText(new_course)
 
     def current_course(self):
         return getattr(self, '_current_course', "Inbox")
@@ -289,12 +276,14 @@ class VaultInterface(QWidget):
         if file_paths:
             self._execute_import(file_paths)
 
-    def on_course_changed(self, routeKey: str):
-        self._current_course = routeKey
+    def on_course_changed(self, text: str):
+        if not text:
+            return
+        self._current_course = text
         if self.search_bar.text() != "":
             self.search_bar.clear() # This implicitly triggers refresh_gallery due to textChanged
         else:
-            self.refresh_gallery(routeKey)
+            self.refresh_gallery(text)
 
     def refresh_gallery(self, course: str, filter_text: str = ""):
         # Clear existing layout properly to prevent C++ invalid pointer crash
