@@ -142,7 +142,8 @@ class VaultInterface(QWidget):
         # Scrollable container for courses
         self.tabs_scroll = ScrollArea(self)
         self.tabs_scroll.setWidgetResizable(True)
-        self.tabs_scroll.setFixedHeight(50)
+        self.tabs_scroll.setMinimumHeight(65)
+        self.tabs_scroll.setMaximumHeight(80)
         self.tabs_scroll.setFrameShape(ScrollArea.NoFrame)
         self.tabs_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.tabs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)

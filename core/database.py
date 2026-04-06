@@ -57,6 +57,14 @@ def initialize_db():
         )
     """)
     
+    # Search index virtual table
+    cursor.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+            file_id UNINDEXED,
+            text_content
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
