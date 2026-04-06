@@ -50,7 +50,7 @@ class ZenWriter(QWidget):
         self.save_timer.timeout.connect(self.auto_save)
         
     def on_text_changed(self):
-        self.status_label.setText("Saving...")
+        self.status_label.setText("Editing...")
         self.save_timer.start()
         
     def auto_save(self):
@@ -58,6 +58,11 @@ class ZenWriter(QWidget):
         if not text:
             self.status_label.setText("Draft (Empty)")
             return
+            
+        self.status_label.setText("Saving...")
+        # Force a UI paint to update the label before synchronous work blocks it
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
             
         # Determine filename from first line
         first_line = text.split('\n')[0][:50]
@@ -87,8 +92,6 @@ class ZenWriter(QWidget):
             file_hash = get_file_hash(new_path)
             
             # Simple upsert to database depending on whether we registered it yet
-            conn = get_connection()
-            cursor = conn.cursor()
             
             if self.db_id is None:
                 # Insert
@@ -100,16 +103,19 @@ class ZenWriter(QWidget):
                     text_content=text
                 )
             else:
-                # Update DB to match new content/path/hash
-                cursor.execute("""
-                    UPDATE files SET path = ?, file_hash = ? WHERE id = ?
-                """, (new_path, file_hash, self.db_id))
-                cursor.execute("""
-                    UPDATE search_index SET text_content = ? WHERE file_id = ?
-                """, (text, self.db_id))
-                conn.commit()
-            
-            conn.close()
+                conn = get_connection()
+                try:
+                    cursor = conn.cursor()
+                    # Update DB to match new content/path/hash
+                    cursor.execute("""
+                        UPDATE files SET path = ?, file_hash = ? WHERE id = ?
+                    """, (new_path, file_hash, self.db_id))
+                    cursor.execute("""
+                        UPDATE search_index SET text_content = ? WHERE file_id = ?
+                    """, (text, self.db_id))
+                    conn.commit()
+                finally:
+                    conn.close()
             
             self.status_label.setText("Saved ✓")
             self.saveCompleted.emit()

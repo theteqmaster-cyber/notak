@@ -72,9 +72,8 @@ def check_duplicate_hash(file_hash: str) -> bool:
 def insert_file(path: str, file_hash: str, course: str, category: str, text_content: str = "") -> int:
     """Insert a new file record and its extracted text for search."""
     conn = get_connection()
-    cursor = conn.cursor()
-    
     try:
+        cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO files (path, file_hash, course, category)
             VALUES (?, ?, ?, ?)
@@ -94,6 +93,8 @@ def insert_file(path: str, file_hash: str, course: str, category: str, text_cont
         # Path already exists or other constraint failed
         conn.rollback()
         return -1
+    finally:
+        conn.close()
 def mark_as_deleted(path: str):
     """Mark a file as deleted with a timestamp."""
     conn = get_connection()
