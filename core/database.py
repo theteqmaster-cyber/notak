@@ -213,7 +213,7 @@ def get_library_stats():
     cursor.execute("SELECT count(DISTINCT course) FROM files WHERE deleted_at IS NULL AND course != 'Notei'")
     course_count = cursor.fetchone()[0]
     
-    cursor.execute("SELECT count(*) FROM files WHERE course = 'Notei' AND deleted_at IS NULL")
+    cursor.execute("SELECT count(*) FROM files WHERE category = 'Notes' AND deleted_at IS NULL")
     notei_count = cursor.fetchone()[0]
     
     conn.close()

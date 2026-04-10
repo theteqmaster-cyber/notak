@@ -9,6 +9,7 @@ from qfluentwidgets import (ScrollArea, TitleLabel, SearchLineEdit,
 
 from core.database import search_files
 from core.importer import split_filename_for_display
+from gui.components.marquee_label import MarqueeLabel
 
 class SearchResultCard(CardWidget):
     clicked = Signal(str)
@@ -36,8 +37,10 @@ class SearchResultCard(CardWidget):
         basename = os.path.basename(self.file_path)
         display_name, _ = split_filename_for_display(basename)
         
-        self.name_lbl = BodyLabel(display_name)
-        self.name_lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.name_lbl = MarqueeLabel(display_name)
+        self.name_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.name_lbl.setStyleSheet("font-weight: bold; font-size: 14px; background: transparent; border: none;")
+        self.name_lbl.setFixedWidth(200) # Give it some breathing room but don't let it hog the whole row
         self.h_header.addWidget(self.name_lbl)
         self.h_header.addStretch(1)
         

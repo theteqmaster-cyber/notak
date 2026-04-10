@@ -15,6 +15,7 @@ from core.database import (get_all_courses, get_connection, insert_file,
                            check_duplicate_hash, delete_file_by_path, mark_as_deleted, 
                            restore_file_by_path)
 from core.importer import process_file_import, VAULT_DIR, get_file_hash, split_filename_for_display
+from gui.components.marquee_label import MarqueeLabel
 
 def get_files_for_course(course: str):
     conn = get_connection()
@@ -347,10 +348,9 @@ class VaultInterface(QWidget):
             basename = os.path.basename(f['path'])
             display_name, suffix = split_filename_for_display(basename)
             
-            name = BodyLabel(display_name)
-            name.setWordWrap(True)
+            name = MarqueeLabel(display_name)
             name.setAlignment(Qt.AlignCenter)
-            name.setStyleSheet("color: #f0f0f0; font-size: 13px; font-weight: bold;")
+            name.setStyleSheet("color: #f0f0f0; font-size: 13px; font-weight: bold; background: transparent; border: none;")
             c_layout.addWidget(name)
             
             if suffix:

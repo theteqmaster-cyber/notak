@@ -1,29 +1,36 @@
-from PySide6.QtCore import Qt, QTimer, QRect, QPoint
-from PySide6.QtWidgets import QWidget, QLabel
-from PySide6.QtGui import QPainter, QFontMetrics
+from PySide6.QtCore import Qt, QTimer, QRect, QPoint, QSize
+from PySide6.QtWidgets import QLabel
+from PySide6.QtGui import QPainter, QFontMetrics, QPalette
 
-class MarqueeLabel(QWidget):
+class MarqueeLabel(QLabel):
     def __init__(self, text="", parent=None):
-        super().__init__(parent)
-        self.text = text
+        super().__init__(text, parent)
+        self.text_content = text # Renamed to avoid collision with QLabel.text()
         self.offset = 0
         self.scroll_speed = 1 # pixels per frame
         self.gap = 50 # space between loops
+        self.alignment_flags = Qt.AlignLeft | Qt.AlignVCenter
         
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_offset)
         self.timer.setInterval(30) # ~33 fps for smooth motion
         
         self.setFixedHeight(30)
+        self.setAttribute(Qt.WA_StyledBackground)
         self.setStyleSheet("background: transparent; color: white; font-weight: bold; border: none;")
 
+    def setAlignment(self, alignment):
+        self.alignment_flags = alignment
+        self.update()
+
     def setText(self, text):
-        self.text = text
+        self.text_content = text
+        super().setText("") # Hide the original QLabel text rendering
         self.offset = 0
         self.update()
         # Only start timer if text is too long
         metrics = QFontMetrics(self.font())
-        if metrics.horizontalAdvance(self.text) > self.width():
+        if metrics.horizontalAdvance(self.text_content) > self.width():
             if not self.timer.isActive():
                 self.timer.start()
         else:
@@ -31,7 +38,7 @@ class MarqueeLabel(QWidget):
 
     def update_offset(self):
         metrics = QFontMetrics(self.font())
-        text_width = metrics.horizontalAdvance(self.text)
+        text_width = metrics.horizontalAdvance(self.text_content)
         
         if text_width <= self.width():
             self.timer.stop()
@@ -44,24 +51,36 @@ class MarqueeLabel(QWidget):
             self.offset = 0
         self.update()
 
+    def sizeHint(self):
+        metrics = QFontMetrics(self.font())
+        # Default size hint based on text width or minimum width
+        width = metrics.horizontalAdvance(self.text_content)
+        return QSize(min(width + 20, 200), 30)
+
+    def minimumSizeHint(self):
+        return QSize(50, 30)
+
     def paintEvent(self, event):
         painter = QPainter(self)
-        metrics = QFontMetrics(self.font())
-        text_width = metrics.horizontalAdvance(self.text)
+        painter.setPen(self.palette().color(QPalette.WindowText))
         
-        # Center horizontally if text fits
+        metrics = QFontMetrics(self.font())
+        text_width = metrics.horizontalAdvance(self.text_content)
+        
+        # Draw normally if text fits, respecting alignment
         if text_width <= self.width():
-            painter.drawText(self.rect(), Qt.AlignVCenter | Qt.AlignLeft, self.text)
+            painter.drawText(self.rect(), self.alignment_flags, self.text_content)
             return
 
         # Continuous loop drawing
         # 1. Main text at current offset
-        painter.drawText(self.offset, metrics.ascent() + (self.height() - metrics.height()) // 2, self.text)
+        y = metrics.ascent() + (self.height() - metrics.height()) // 2
+        painter.drawText(int(self.offset), int(y), self.text_content)
         
         # 2. Second copy for seamless transition
-        painter.drawText(self.offset + text_width + self.gap, metrics.ascent() + (self.height() - metrics.height()) // 2, self.text)
+        painter.drawText(int(self.offset + text_width + self.gap), int(y), self.text_content)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         # Re-check if scrolling is needed on resize
-        self.setText(self.text)
+        self.setText(self.text_content)

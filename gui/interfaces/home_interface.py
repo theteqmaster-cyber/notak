@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt, QTimer, Signal, QDateTime, QDate
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 from qfluentwidgets import (ScrollArea, TitleLabel, SubtitleLabel, TransparentPushButton, SearchLineEdit,
                             StrongBodyLabel, CardWidget, IconWidget, FluentIcon as FIF, BodyLabel, CaptionLabel)
+from gui.components.marquee_label import MarqueeLabel
 
 from core.database import get_events_for_date, get_recent_files, get_library_stats
 from core.importer import split_filename_for_display
@@ -210,9 +211,10 @@ class HomeInterface(ScrollArea):
         for r in recent:
             basename = os.path.basename(r['path'])
             name, _ = split_filename_for_display(basename)
-            rlbl = BodyLabel(name)
-            rlbl.setStyleSheet("color: #ddd; font-size: 13px;")
-            layout.addWidget(rlbl, alignment=Qt.AlignCenter)
+            rlbl = MarqueeLabel(name)
+            rlbl.setAlignment(Qt.AlignCenter)
+            rlbl.setStyleSheet("color: #ddd; font-size: 13px; background: transparent; border: none;")
+            layout.addWidget(rlbl) # Removed explicit alignment that causes shrinking
 
     def refresh_library_pulse(self):
         layout = self.stats_card.layout()
