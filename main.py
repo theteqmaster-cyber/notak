@@ -1,7 +1,6 @@
 import sys
 import os
 os.environ["QT_API"] = "pyside6"
-os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 

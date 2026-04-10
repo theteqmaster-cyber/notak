@@ -19,6 +19,7 @@ from gui.interfaces.search_interface import DeepSearchInterface
 from gui.interfaces.about_interface import AboutInterface
 from gui.interfaces.games_interface import GamesInterface
 from gui.interfaces.radio_interface import RadioInterface
+from gui.interfaces.hydraspace_interface import HydraSpaceInterface
 from core.database import initialize_db, purge_old_deleted_items
 
 class MainWindow(FluentWindow):
@@ -47,6 +48,7 @@ class MainWindow(FluentWindow):
         self.aboutInterface = AboutInterface(self)
         self.gamesInterface = GamesInterface(self)
         self.radioInterface = RadioInterface(self)
+        self.hydraInterface = HydraSpaceInterface(self)
         
         # Title bar clock
         self.title_clock = SubtitleLabel(QTime.currentTime().toString("HH:mm"), self)
@@ -76,6 +78,7 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.musicInterface, FIF.MUSIC, 'Music Hub', NavigationItemPosition.TOP)
         self.addSubInterface(self.radioInterface, FIF.WIFI, 'Internet Radio', NavigationItemPosition.TOP)
         self.addSubInterface(self.noteiInterface, FIF.EDIT, 'Notei', NavigationItemPosition.TOP)
+        self.addSubInterface(self.hydraInterface, FIF.GLOBE, 'HydraSpace', NavigationItemPosition.TOP)
         
         self.navigationInterface.addSeparator() # Visual separation for non-study tools
         
@@ -94,6 +97,7 @@ class MainWindow(FluentWindow):
         # Dark theme
         setTheme(Theme.DARK)
         self.setObjectName("NotakWindow")
+        self.setAttribute(Qt.WA_TranslucentBackground)
 
     def setBackgroundImage(self, image_path):
         if not os.path.exists(image_path):
@@ -109,6 +113,9 @@ class MainWindow(FluentWindow):
                 border: none;
             }
             .StackedWidget, .ScrollArea, .QWidget {
+                background: transparent;
+            }
+            #NotakWindow {
                 background: transparent;
             }
         """
