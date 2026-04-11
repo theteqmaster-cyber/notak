@@ -136,7 +136,7 @@ class MusicInterface(QWidget):
         
         self.now_playing_card = QWidget()
         self.now_playing_card.setFixedHeight(120) 
-        self.now_playing_card.setStyleSheet("background: rgba(0, 0, 0, 0.85); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08);")
+        self.now_playing_card.setStyleSheet("background: rgba(0, 0, 0, 0.85); border-radius: 12px; border: none;")
         self.layout.addWidget(self.now_playing_card)
         
         self.footer_layout = QHBoxLayout(self.now_playing_card)
@@ -232,7 +232,7 @@ class MusicInterface(QWidget):
         for i in range(self.playlist_widget.count()):
             item = self.playlist_widget.item(i)
             widget = self.playlist_widget.itemWidget(item)
-            if widget: item.setHidden(not (search_text in widget.path.lower() or search_text in widget.title_lbl.text.lower()))
+            if widget: item.setHidden(not (search_text in widget.path.lower() or search_text in widget.title_lbl.text_content.lower()))
 
     def handle_playback_change(self, state):
         if state == QMediaPlayer.PlaybackState.PlayingState:
@@ -277,15 +277,26 @@ class MusicInterface(QWidget):
     def update_metadata(self, path):
         self.track_name_label.setText(os.path.basename(path))
         self.artist_label.setText("Unknown Artist")
+        self.cover_label.setPixmap(QPixmap())
         try:
             if path.endswith('.mp3'):
                 audio = MP3(path, ID3=ID3)
                 if 'TIT2' in audio: self.track_name_label.setText(str(audio['TIT2']))
                 if 'TPE1' in audio: self.artist_label.setText(str(audio['TPE1']))
+                for tag in audio.tags.values():
+                    if isinstance(tag, APIC):
+                        img = QPixmap()
+                        img.loadFromData(tag.data)
+                        self.cover_label.setPixmap(img.scaled(60, 60, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+                        break
             elif path.endswith('.m4a'):
                 audio = MP4(path)
                 if '\xa9nam' in audio: self.track_name_label.setText(audio['\xa9nam'][0])
                 if '\xa9ART' in audio: self.artist_label.setText(audio['\xa9ART'][0])
+                if 'covr' in audio:
+                    img = QPixmap()
+                    img.loadFromData(audio['covr'][0])
+                    self.cover_label.setPixmap(img.scaled(60, 60, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
         except: pass
     def clear_playlist(self): self.playlist_widget.clear(); self.save_playlist()
     def save_playlist(self):
