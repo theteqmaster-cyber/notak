@@ -9,6 +9,7 @@ from qfluentwidgets import (SubtitleLabel, PrimaryPushButton, TransparentPushBut
                             Slider, IconWidget, FluentIcon as FIF, ScrollArea, BodyLabel, 
                             SegmentedWidget, CaptionLabel, CardWidget, SearchLineEdit)
 import datetime
+import json
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, APIC
 from mutagen.mp4 import MP4
@@ -176,10 +177,10 @@ class MusicInterface(QWidget):
         center_v = QVBoxLayout(center_box)
         ctrl_layout = QHBoxLayout()
         ctrl_layout.setAlignment(Qt.AlignCenter)
-        self.btn_prev = TransparentPushButton(FIF.SKIP_BACK, "")
+        self.btn_prev = TransparentPushButton(FIF.LEFT_ARROW, "")
         self.btn_play = PrimaryPushButton(FIF.PLAY, "")
         self.btn_pause = TransparentPushButton(FIF.PAUSE, "")
-        self.btn_next = TransparentPushButton(FIF.SKIP_FORWARD, "")
+        self.btn_next = TransparentPushButton(FIF.RIGHT_ARROW, "")
         self.btn_play.clicked.connect(self.player.play)
         self.btn_pause.clicked.connect(self.player.pause)
         self.btn_prev.clicked.connect(self.play_previous)
@@ -255,13 +256,32 @@ class MusicInterface(QWidget):
         if status == QMediaPlayer.MediaStatus.EndOfMedia: self.play_next_auto()
     def play_next_auto(self):
         if self.playlist_widget.count() == 0: return
-        next_row = (self.playlist_widget.currentRow() + 1) % self.playlist_widget.count()
-        self.playlist_widget.setCurrentRow(next_row); self.play_selected_track(self.playlist_widget.currentItem())
-    def play_next_manual(self): self.play_next_auto()
+        
+        if self.playback_mode == LOOP_ONE:
+            self.player.setPosition(0)
+            self.player.play()
+            return
+
+        self.play_next_manual()
+
+    def play_next_manual(self): 
+        if self.playlist_widget.count() == 0: return
+        
+        if self.playback_mode == SHUFFLE and self.playlist_widget.count() > 1:
+            next_row = random.randint(0, self.playlist_widget.count() - 1)
+            while next_row == self.playlist_widget.currentRow():
+                next_row = random.randint(0, self.playlist_widget.count() - 1)
+        else:
+            next_row = (self.playlist_widget.currentRow() + 1) % self.playlist_widget.count()
+            
+        self.playlist_widget.setCurrentRow(next_row)
+        self.play_selected_track(self.playlist_widget.currentItem())
+
     def play_previous(self):
         if self.playlist_widget.count() == 0: return
         prev_row = (self.playlist_widget.currentRow() - 1) % self.playlist_widget.count()
-        self.playlist_widget.setCurrentRow(prev_row); self.play_selected_track(self.playlist_widget.currentItem())
+        self.playlist_widget.setCurrentRow(prev_row)
+        self.play_selected_track(self.playlist_widget.currentItem())
     def import_music(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Import Tracks", "", "Audio Files (*.mp3 *.wav *.m4a)")
         for f in files:
@@ -273,7 +293,34 @@ class MusicInterface(QWidget):
         if not item: return
         path = item.data(Qt.UserRole)
         if os.path.exists(path):
-            self.player.setSource(QUrl.fromLocalFile(path)); self.update_metadata(path); self.player.play()
+            self.player.setSource(QUrl.fromLocalFile(path))
+            self.update_metadata(path)
+            self.player.play()
+            self.update_song_stats(path)
+
+    def update_song_stats(self, path):
+        # Update timestamp and increment play count
+        playlist = self._read_playlist_data()
+        now = datetime.datetime.now().isoformat()
+        found = False
+        for entry in playlist:
+            if entry['path'] == path:
+                entry['last_played'] = now
+                # Initialize play_count if it doesn't exist, then increment
+                entry['play_count'] = entry.get('play_count', 0) + 1
+                found = True
+                break
+        if not found:
+            playlist.append({'path': path, 'last_played': now, 'play_count': 1})
+        
+        self.save_playlist_data(playlist)
+        
+        # We don't want to re-order the UI IMMEDIATELY while something is playing
+        # because it resets the currentIndex and breaks 'Next' button flow (creates a 2-song loop).
+        # The re-sorting will happen when the playlist is reloaded or if we explicitly refresh it.
+        # For now, let's just make sure the current item remains selected without resetting row to 0.
+        pass
+
     def update_metadata(self, path):
         self.track_name_label.setText(os.path.basename(path))
         self.artist_label.setText("Unknown Artist")
@@ -298,16 +345,62 @@ class MusicInterface(QWidget):
                     img.loadFromData(audio['covr'][0])
                     self.cover_label.setPixmap(img.scaled(60, 60, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
         except: pass
-    def clear_playlist(self): self.playlist_widget.clear(); self.save_playlist()
-    def save_playlist(self):
-        with open(".notak_playlist", "w") as f:
-            for i in range(self.playlist_widget.count()): f.write(self.playlist_widget.item(i).data(Qt.UserRole) + "\n")
-    def load_playlist(self):
+
+    def clear_playlist(self):
+        self.playlist_widget.clear()
+        if os.path.exists(".notak_playlist.json"):
+            os.remove(".notak_playlist.json")
         if os.path.exists(".notak_playlist"):
+            os.remove(".notak_playlist")
+
+    def _read_playlist_data(self):
+        if os.path.exists(".notak_playlist.json"):
+            try:
+                with open(".notak_playlist.json", "r") as f:
+                    data = json.load(f)
+                    # Migrating old data if play_count is missing
+                    for entry in data:
+                        if 'play_count' not in entry:
+                            entry['play_count'] = 0
+                    return data
+            except: return []
+        # Legacy support
+        elif os.path.exists(".notak_playlist"):
             with open(".notak_playlist", "r") as f:
-                for p in f.readlines():
-                    p = p.strip()
-                    if os.path.exists(p):
-                        item = QListWidgetItem(); item.setData(Qt.UserRole, p)
-                        sw = SongItemWidget(p); item.setSizeHint(sw.sizeHint())
-                        self.playlist_widget.addItem(item); self.playlist_widget.setItemWidget(item, sw)
+                return [{'path': p.strip(), 'last_played': '', 'play_count': 0} for p in f.readlines()]
+        return []
+
+    def save_playlist(self):
+        playlist = []
+        # Current paths in widget
+        for i in range(self.playlist_widget.count()):
+            path = self.playlist_widget.item(i).data(Qt.UserRole)
+            playlist.append({'path': path, 'last_played': '', 'play_count': 0})
+        
+        # Merge with existing stats
+        existing = {e['path']: (e.get('last_played', ''), e.get('play_count', 0)) for e in self._read_playlist_data()}
+        for entry in playlist:
+            if entry['path'] in existing:
+                entry['last_played'], entry['play_count'] = existing[entry['path']]
+        
+        self.save_playlist_data(playlist)
+
+    def save_playlist_data(self, data):
+        with open(".notak_playlist.json", "w") as f:
+            json.dump(data, f, indent=4)
+
+    def load_playlist(self):
+        data = self._read_playlist_data()
+        # Sort by play_count descending (primary), then last_played descending (secondary)
+        data.sort(key=lambda x: (x.get('play_count', 0), x.get('last_played', '')), reverse=True)
+        
+        self.playlist_widget.clear()
+        for entry in data:
+            p = entry['path']
+            if os.path.exists(p):
+                item = QListWidgetItem()
+                item.setData(Qt.UserRole, p)
+                sw = SongItemWidget(p)
+                item.setSizeHint(sw.sizeHint())
+                self.playlist_widget.addItem(item)
+                self.playlist_widget.setItemWidget(item, sw)

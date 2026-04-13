@@ -8,6 +8,7 @@ from qfluentwidgets import (ScrollArea, TitleLabel, PrimaryPushButton,
 
 from core.database import get_connection
 from core.importer import split_filename_for_display
+from gui.components.marquee_label import MarqueeLabel
 
 def get_notei_files():
     conn = get_connection()
@@ -96,7 +97,7 @@ class NoteiInterface(QWidget):
         row, col = 0, 0
         max_cols = 5
         for f in files:
-            card = ClickableCardWidget(f['path'], self)
+            card = ClickableCardWidget(f['path'], 'Notes', self)
             card.setFixedSize(160, 210)
             card.deleted.connect(self.refresh_gallery)
             
@@ -113,10 +114,10 @@ class NoteiInterface(QWidget):
             basename = os.path.basename(f['path'])
             display_name, suffix = split_filename_for_display(basename)
             
-            name = BodyLabel(display_name)
-            name.setWordWrap(True)
+            name = MarqueeLabel(display_name)
+            name.setFixedWidth(130) # Card width is 160, margin is 15x2
             name.setAlignment(Qt.AlignCenter)
-            name.setStyleSheet("color: #e0e0e0; font-size: 13px; font-weight: bold;")
+            name.setStyleSheet("color: #e0e0e0; font-size: 13px; font-weight: bold; background: transparent; border: none;")
             c_layout.addWidget(name)
             
             if suffix:

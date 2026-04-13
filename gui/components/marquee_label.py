@@ -27,14 +27,17 @@ class MarqueeLabel(QLabel):
         self.text_content = text
         super().setText("") # Hide the original QLabel text rendering
         self.offset = 0
+        self.check_overflow()
         self.update()
-        # Only start timer if text is too long
+
+    def check_overflow(self):
         metrics = QFontMetrics(self.font())
-        if metrics.horizontalAdvance(self.text_content) > self.width():
+        if metrics.horizontalAdvance(self.text_content) > self.width() > 0:
             if not self.timer.isActive():
                 self.timer.start()
         else:
             self.timer.stop()
+            self.offset = 0
 
     def update_offset(self):
         metrics = QFontMetrics(self.font())
@@ -62,10 +65,18 @@ class MarqueeLabel(QLabel):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setPen(self.palette().color(QPalette.WindowText))
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Use the stylesheet-defined color if possible, otherwise white
+        color = self.palette().color(QPalette.WindowText)
+        painter.setPen(color)
         
         metrics = QFontMetrics(self.font())
         text_width = metrics.horizontalAdvance(self.text_content)
+        
+        # If we have no width yet, don't draw
+        if self.width() <= 0:
+            return
         
         # Draw normally if text fits, respecting alignment
         if text_width <= self.width():
@@ -83,4 +94,4 @@ class MarqueeLabel(QLabel):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         # Re-check if scrolling is needed on resize
-        self.setText(self.text_content)
+        self.check_overflow()

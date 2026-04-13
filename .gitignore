@@ -5,4 +5,5 @@ __pycache__/
 *.pyd
 .notak_config
 .notak_playlist
+.notak_playlist.json
 *.log
