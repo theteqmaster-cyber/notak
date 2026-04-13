@@ -1,13 +1,14 @@
 import os
 import datetime
 from PySide6.QtCore import Qt, QTimer, Signal, QDateTime, QDate
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QFrame
 from qfluentwidgets import (ScrollArea, TitleLabel, SubtitleLabel, TransparentPushButton, SearchLineEdit,
                             StrongBodyLabel, CardWidget, IconWidget, FluentIcon as FIF, BodyLabel, CaptionLabel)
 from gui.components.marquee_label import MarqueeLabel
 
 from core.database import get_events_for_date, get_recent_files, get_library_stats
 from core.importer import split_filename_for_display
+from core.gemma_service import GemmaService
 
 class HomeInterface(ScrollArea):
     backgroundChanged = Signal(str)
@@ -27,7 +28,7 @@ class HomeInterface(ScrollArea):
         self.vBoxLayout.setSpacing(30)
         self.vBoxLayout.setAlignment(Qt.AlignTop)
 
-        # Top Action Area (Inspiration Button)
+        # Top Action Area
         self.top_actions = QHBoxLayout()
         self.top_actions.setAlignment(Qt.AlignLeft)
         
@@ -45,7 +46,6 @@ class HomeInterface(ScrollArea):
                 background: rgba(255, 255, 255, 0.1);
             }
         """)
-        
         self.top_actions.addWidget(self.btn_inspiration)
         
         self.btn_search = TransparentPushButton(FIF.SEARCH, "Deep Search", self.view)
@@ -54,15 +54,21 @@ class HomeInterface(ScrollArea):
         self.btn_search.setStyleSheet(self.btn_inspiration.styleSheet())
         self.top_actions.addWidget(self.btn_search)
         
+        self.btn_gemma = TransparentPushButton(FIF.CHAT, "Ask Gemma", self.view)
+        self.btn_gemma.setFixedSize(180, 40)
+        self.btn_gemma.clicked.connect(self.open_gemma_chat)
+        self.btn_gemma.setStyleSheet(self.btn_inspiration.styleSheet())
+        self.top_actions.addWidget(self.btn_gemma)
+        
         self.vBoxLayout.addLayout(self.top_actions)
 
-        # Hero / Clock / Quick Search Section
-        self.vBoxLayout.addSpacing(60)
+        self.vBoxLayout.addSpacing(70)
         
+        # Clock Section
         self.clock_label = TitleLabel("", self.view)
         self.clock_label.setAlignment(Qt.AlignCenter)
         font = self.clock_label.font()
-        font.setPointSize(64)
+        font.setPointSize(68)
         font.setBold(True)
         self.clock_label.setFont(font)
         self.clock_label.setStyleSheet("color: white; font-weight: bold;")
@@ -70,77 +76,141 @@ class HomeInterface(ScrollArea):
         
         self.date_label = SubtitleLabel("", self.view)
         self.date_label.setAlignment(Qt.AlignCenter)
-        self.date_label.setStyleSheet("color: rgba(255, 255, 255, 0.6); font-size: 20px;")
         self.vBoxLayout.addWidget(self.date_label)
+        self.vBoxLayout.addSpacing(30)
         
-        self.vBoxLayout.addSpacing(40)
-        
-        # Quick Search Bar in Hero
+        # Search Bar
         self.hero_search = SearchLineEdit(self.view)
         self.hero_search.setPlaceholderText("Quick search your entire library...")
-        self.hero_search.setFixedWidth(500)
+        self.hero_search.setFixedWidth(600)
         self.hero_search.searchButton.clicked.connect(lambda: self.searchRequested.emit(self.hero_search.text()))
         self.hero_search.returnPressed.connect(lambda: self.searchRequested.emit(self.hero_search.text()))
         self.vBoxLayout.addWidget(self.hero_search, alignment=Qt.AlignCenter)
+        self.vBoxLayout.addSpacing(40)
         
-        self.vBoxLayout.addSpacing(80)
+        # --- AI HERO CARD (Motivational) SIDE-BY-SIDE ---
+        self.ai_card = CardWidget(self.view)
+        self.ai_card.setFixedWidth(850)
+        self.ai_card.setMinimumHeight(200)
+        self.ai_card.setStyleSheet("""
+            CardWidget { 
+                background: rgba(255, 255, 255, 0.04); 
+                border: 1px solid rgba(255, 255, 255, 0.1); 
+                border-radius: 20px; 
+            }
+        """)
+        ai_main_layout = QHBoxLayout(self.ai_card)
+        ai_main_layout.setContentsMargins(40, 35, 40, 35)
+        ai_main_layout.setSpacing(0)
         
-        # Cards Layout
+        # Left Side (Tip)
+        self.tip_container = QWidget()
+        tip_v = QVBoxLayout(self.tip_container)
+        tip_v.setContentsMargins(0, 0, 20, 0)
+        tip_v.setSpacing(8)
+        
+        tip_header_h = QHBoxLayout()
+        tip_header_h.setSpacing(8)
+        tip_icon = IconWidget(FIF.EXPRESSIVE_INPUT_ENTRY)
+        tip_icon.setFixedSize(14, 14)
+        tip_icon.setStyleSheet("color: #00ffaa;")
+        self.tip_hdr = CaptionLabel("STUDY TIP")
+        self.tip_hdr.setStyleSheet("color: #00ffaa; font-weight: bold; font-size: 9px; letter-spacing: 1.5px;")
+        tip_header_h.addWidget(tip_icon)
+        tip_header_h.addWidget(self.tip_hdr)
+        tip_header_h.addStretch()
+        
+        self.tip_lbl = BodyLabel("Thinking...")
+        self.tip_lbl.setWordWrap(True)
+        self.tip_lbl.setStyleSheet("color: white; font-size: 14px; font-weight: 500;")
+        
+        tip_v.addLayout(tip_header_h)
+        tip_v.addWidget(self.tip_lbl)
+        tip_v.addStretch()
+        
+        # Vertical Divider
+        self.divider = QFrame()
+        self.divider.setFixedWidth(1)
+        self.divider.setStyleSheet("background-color: rgba(255, 255, 255, 0.1);")
+        
+        # Right Side (Quote)
+        self.quote_container = QWidget()
+        quote_v = QVBoxLayout(self.quote_container)
+        quote_v.setContentsMargins(20, 0, 0, 0)
+        quote_v.setSpacing(8)
+        
+        quote_header_h = QHBoxLayout()
+        quote_header_h.setSpacing(8)
+        quote_icon = IconWidget(FIF.CHAT)
+        quote_icon.setFixedSize(14, 14)
+        quote_icon.setStyleSheet("color: #ffaa00;")
+        self.quote_hdr = CaptionLabel("INSPIRATION")
+        self.quote_hdr.setStyleSheet("color: #ffaa00; font-weight: bold; font-size: 9px; letter-spacing: 1.5px;")
+        quote_header_h.addWidget(quote_icon)
+        quote_header_h.addWidget(self.quote_hdr)
+        quote_header_h.addStretch()
+        
+        self.quote_lbl = BodyLabel("...")
+        self.quote_lbl.setWordWrap(True)
+        self.quote_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.6); font-size: 13px; font-style: italic;")
+        
+        quote_v.addLayout(quote_header_h)
+        quote_v.addWidget(self.quote_lbl)
+        quote_v.addStretch()
+        
+        ai_main_layout.addWidget(self.tip_container, 6)
+        ai_main_layout.addWidget(self.divider)
+        ai_main_layout.addWidget(self.quote_container, 4)
+        
+        # MAKE CARD CLICKABLE FOR RETRY
+        self.ai_card.setCursor(Qt.PointingHandCursor)
+        self.ai_card.mousePressEvent = lambda e: self.update_ai_recommendation(force=True)
+        
+        self.vBoxLayout.addWidget(self.ai_card, alignment=Qt.AlignCenter)
+        self.vBoxLayout.addSpacing(70)
+        
+        # Bottom Grid (Events, Studies, Stats)
         self.cards_layout = QHBoxLayout()
         self.cards_layout.setSpacing(25)
         self.cards_layout.setAlignment(Qt.AlignCenter)
         
-        # 1. Today's Events Card
-        self.events_card, self.ev_list_layout = self.create_card("TODAY'S EVENTS", 320)
-        self.ev_list_layout.setContentsMargins(20, 20, 20, 20)
-        self.ev_list_layout.setAlignment(Qt.AlignTop | Qt.AlignCenter)
+        self.events_card, self.ev_list_layout = self.create_card("TODAY'S TASKS", 320)
         self.cards_layout.addWidget(self.events_card)
-        
-        # 2. Recent Studies Card
-        self.recent_card, self.recent_list_layout = self.create_card("RECENTLY WORKED ON", 320)
-        self.recent_list_layout.setContentsMargins(20, 20, 20, 20)
-        self.recent_list_layout.setAlignment(Qt.AlignTop | Qt.AlignCenter)
+        self.recent_card, self.recent_list_layout = self.create_card("RECENT WORK", 320)
         self.cards_layout.addWidget(self.recent_card)
-        
-        # 3. Library Pulse Card (Stats)
         self.stats_card, self.stats_list_layout = self.create_card("LIBRARY PULSE", 320)
-        self.stats_list_layout.setContentsMargins(20, 20, 20, 20)
-        self.stats_list_layout.setAlignment(Qt.AlignTop | Qt.AlignCenter)
         self.cards_layout.addWidget(self.stats_card)
         
         self.vBoxLayout.addLayout(self.cards_layout)
+
+        # Internal State
+        self._recommendation_raw = ""
+        self._ai_generated = False
         
-        # Clock Timer
+        # Timers
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_clock)
         self.timer.start(1000)
+        
+        # AIR GAP Polling Timer
+        self.polling_timer = QTimer(self)
+        self.polling_timer.timeout.connect(self._sync_ai_buffer)
+        
         self.update_clock()
 
     def create_card(self, title, width):
         card = CardWidget(self.view)
         card.setFixedWidth(width)
         card.setFixedHeight(250)
-        card.setStyleSheet("""
-            CardWidget {
-                background: rgba(0, 0, 0, 0.7);
-                border: 1px solid rgba(255, 255, 255, 0.15);
-                border-radius: 12px;
-            }
-        """)
-        # We'll use this layout to add the header then the sub-widgets
+        card.setStyleSheet("CardWidget { background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; }")
         v = QVBoxLayout(card)
         v.setAlignment(Qt.AlignTop)
+        v.setContentsMargins(20, 20, 20, 20)
         hdr = StrongBodyLabel(title)
-        hdr.setStyleSheet("color: rgba(255, 255, 255, 0.4); font-size: 10px; letter-spacing: 1px;")
+        hdr.setStyleSheet("color: rgba(255, 255, 255, 0.3); font-size: 10px; letter-spacing: 1.5px;")
         v.addWidget(hdr, alignment=Qt.AlignCenter)
         v.addSpacing(15)
         return card, v
-        
-        # Clock Timer
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_clock)
-        self.timer.start(1000)
-        self.update_clock()
 
     def update_clock(self):
         now = QDateTime.currentDateTime()
@@ -148,96 +218,138 @@ class HomeInterface(ScrollArea):
         self.date_label.setText(now.toString("dddd, MMMM d, yyyy"))
 
     def import_inspiration(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Background Image", "", 
-            "Images (*.png *.jpg *.jpeg *.bmp *.webp)"
-        )
-        if file_path:
-            self.backgroundChanged.emit(file_path)
+        file_path, _ = QFileDialog.getOpenFileName(self, "Inspiration", "", "Images (*.png *.jpg *.jpeg)")
+        if file_path: self.backgroundChanged.emit(file_path)
 
     def showEvent(self, event):
         super().showEvent(event)
         self.refresh_today_events()
         self.refresh_recent_studies()
         self.refresh_library_pulse()
+        if not self._ai_generated:
+            self.update_ai_recommendation()
+
+    def update_ai_recommendation(self, force=False):
+        if self._ai_generated and not force:
+            return
+            
+        self._recommendation_raw = ""
+        self.tip_lbl.setText("Computing your study plan...")
+        self.quote_lbl.setText("...")
+        
+        service = GemmaService()
+        prompt = service.get_recommendation_prompt(get_library_stats(), get_recent_files(3))
+        thread, worker = service.get_chat_thread(prompt, "You are a brief assistant.")
+        
+        self._ai_worker = worker
+        self._ai_thread = thread
+        self._ai_generated = True
+        self.polling_timer.start(50)
+        thread.start()
+
+    def _sync_ai_buffer(self):
+        if not hasattr(self, '_ai_worker') or not self._ai_worker: return
+        
+        # Check for errors (Sync logic with Chat)
+        if self._ai_worker.error_msg:
+            self.polling_timer.stop()
+            self.tip_lbl.setText("⚠️ AI currently unavailable.")
+            self.quote_lbl.setText("Check Ollama status and click here to retry.")
+            self._ai_generated = False # Allow retry
+            return
+
+        while self._ai_worker.output_buffer:
+            chunk = self._ai_worker.output_buffer.pop(0)
+            self._recommendation_raw += chunk
+            
+        # ROBUST PARSING: Search for keywords instead of relying on '|'
+        raw = self._recommendation_raw.replace("**", "").replace("*", "")
+        
+        tip_start = raw.find("Tip:")
+        quote_start = raw.find("Quote:")
+        
+        if tip_start != -1 and quote_start != -1:
+            if tip_start < quote_start:
+                tip = raw[tip_start+4:quote_start].strip().rstrip("|").strip()
+                quote = raw[quote_start+6:].strip()
+            else:
+                quote = raw[quote_start+6:tip_start].strip().rstrip("|").strip()
+                tip = raw[tip_start+4:].strip()
+                
+            self.tip_lbl.setText(tip)
+            self.quote_lbl.setText(quote)
+        elif tip_start != -1:
+            self.tip_lbl.setText(raw[tip_start+4:].strip())
+        elif quote_start != -1:
+            self.quote_lbl.setText(raw[quote_start+6:].strip())
+        else:
+            self.tip_lbl.setText(raw.strip())
+            
+        # Ensure UI updates to fit new text
+        self.tip_lbl.adjustSize()
+        self.quote_lbl.adjustSize()
+        self.ai_card.adjustSize()
+            
+        if self._ai_worker.is_done and not self._ai_worker.output_buffer:
+            self.polling_timer.stop()
+            self._ai_thread.quit()
+            self._ai_thread.wait()
+            self._ai_thread = None
+            self._ai_worker = None
+
+    def open_gemma_chat(self):
+        from gui.components.gemma_chat_view import GemmaChatView
+        self.chat_overlay = GemmaChatView(parent=self.window())
+        self.chat_overlay.closed.connect(self.chat_overlay.close)
+        self.chat_overlay.resize(500, 750)
+        geo = self.window().geometry()
+        self.chat_overlay.move(geo.center() - self.chat_overlay.rect().center())
+        self.chat_overlay.show()
 
     def _clear_layout(self, layout):
-        if not layout:
-            return
-        while layout.count() > 2: # Keep title and spacing
+        while layout.count() > 2: 
             item = layout.takeAt(2)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                # Recursive clear for nested layouts
-                self._clear_layout_recursive(item.layout())
-                
-    def _clear_layout_recursive(self, layout):
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                self._clear_layout_recursive(item.layout())
+            if item.widget(): item.widget().deleteLater()
 
     def refresh_today_events(self):
         layout = self.events_card.layout()
         self._clear_layout(layout)
-                
-        today = QDate.currentDate().toString("yyyy-MM-dd")
-        events = get_events_for_date(today)
-        
+        events = get_events_for_date(QDate.currentDate().toString("yyyy-MM-dd"))
         if not events:
-            lbl = BodyLabel("No tasks for today. Stay focused!")
-            lbl.setStyleSheet("color: #666; font-style: italic; font-size: 13px;")
+            lbl = BodyLabel("No tasks today.")
+            lbl.setStyleSheet("color: #555; font-size: 13px;")
             layout.addWidget(lbl, alignment=Qt.AlignCenter)
         else:
             for ev in events:
-                elbl = BodyLabel(ev['title'])
-                elbl.setStyleSheet("color: white; font-size: 15px; font-weight: 500;")
-                layout.addWidget(elbl, alignment=Qt.AlignCenter)
+                l = BodyLabel(ev['title'])
+                l.setStyleSheet("color: white; font-size: 14px;")
+                layout.addWidget(l, alignment=Qt.AlignCenter)
 
     def refresh_recent_studies(self):
         layout = self.recent_card.layout()
         self._clear_layout(layout)
-            
         recent = get_recent_files(5)
         if not recent:
-            lbl = BodyLabel("Your journey starts here.")
-            lbl.setStyleSheet("color: #666; font-style: italic; font-size: 13px;")
-            layout.addWidget(lbl, alignment=Qt.AlignCenter)
-            return
-
-        for r in recent:
-            basename = os.path.basename(r['path'])
-            name, _ = split_filename_for_display(basename)
-            rlbl = MarqueeLabel(name)
-            rlbl.setAlignment(Qt.AlignCenter)
-            rlbl.setStyleSheet("color: #ddd; font-size: 13px; background: transparent; border: none;")
-            layout.addWidget(rlbl) # Removed explicit alignment that causes shrinking
+            layout.addWidget(BodyLabel("No recent work."), alignment=Qt.AlignCenter)
+        else:
+            for r in recent:
+                name, _ = split_filename_for_display(os.path.basename(r['path']))
+                l = MarqueeLabel(name)
+                l.setStyleSheet("color: #ccc; font-size: 13px;")
+                layout.addWidget(l)
 
     def refresh_library_pulse(self):
         layout = self.stats_card.layout()
         self._clear_layout(layout)
-            
         stats = get_library_stats()
-        
-        st_layout = QVBoxLayout()
-        st_layout.setSpacing(10)
-        
-        def add_stat(icon, text, val):
+        v = QVBoxLayout()
+        v.setSpacing(10)
+        def add(icon, txt, val):
             h = QHBoxLayout()
             h.setAlignment(Qt.AlignCenter)
-            i = IconWidget(icon)
-            i.setFixedSize(16, 16)
-            h.addWidget(i)
-            l = BodyLabel(f"{text}: {val}")
-            l.setStyleSheet("color: #ccc; font-size: 14px;")
-            h.addWidget(l)
-            st_layout.addLayout(h)
-            
-        add_stat(FIF.FOLDER, "Courses", stats['course_count'])
-        add_stat(FIF.EDIT, "Notes", stats['notei_count'])
-        add_stat(FIF.DOCUMENT, "Total Assets", stats['total_files'])
-        
-        layout.addLayout(st_layout)
+            h.addWidget(IconWidget(icon))
+            h.addWidget(BodyLabel(f"{txt}: {val}"))
+            v.addLayout(h)
+        add(FIF.FOLDER, "Courses", stats['course_count'])
+        add(FIF.EDIT, "Notes", stats['notei_count'])
+        layout.addLayout(v)

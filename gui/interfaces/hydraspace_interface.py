@@ -9,6 +9,7 @@ from core.supabase_service import SupabaseService
 from gui.components.login_view import LoginView
 from gui.zen_writer import ZenWriter
 from gui.components.marquee_label import MarqueeLabel
+from gui.components.gemma_chat_view import GemmaChatView
 
 class NoteCard(CardWidget):
     def __init__(self, note_data, parent=None):
@@ -153,6 +154,12 @@ class HydraSpaceInterface(QWidget):
         self.btn_new_note = TransparentPushButton(FIF.ADD, "")
         self.btn_new_note.clicked.connect(self.handle_new_note)
         pivot_h.addWidget(self.btn_new_note)
+        
+        self.btn_ask_gemma = TransparentPushButton(FIF.CHAT, "")
+        self.btn_ask_gemma.setToolTip("Ask Gemma about this course")
+        self.btn_ask_gemma.clicked.connect(self.open_course_gemma_chat)
+        pivot_h.addWidget(self.btn_ask_gemma)
+        
         browser_layout.addLayout(pivot_h)
         
         self.scroll_area = ScrollArea()
@@ -314,6 +321,37 @@ class HydraSpaceInterface(QWidget):
         if new_note:
             self.selected_note = new_note
             self.open_zen_editor()
+
+    def open_course_gemma_chat(self):
+        current_course = self.course_list.currentItem()
+        if not current_course: return
+        
+        course_name = current_course.text()
+        if "📚" in course_name: course_name = course_name.split("📚")[1].strip()
+        
+        # Gather context from RECENT notes (strictly the top 3 most recent to keep it focused)
+        sorted_notes = sorted(self.current_notes, key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        context_parts = []
+        for note in sorted_notes[:3]:
+            title = note.get('title', 'Untitled')
+            content = note.get('content', '')
+            # Strip HTML to get clean markdown/text content
+            import re
+            clean_content = re.sub('<[^<]+?>', '', content)
+            # Take only the first 800 characters of each note to avoid overwhelming the model
+            context_parts.append(f"### Note: {title}\n{clean_content[:800]}...")
+        
+        context_text = "\n\n".join(context_parts)
+        
+        self.chat_overlay = GemmaChatView(course_name=course_name, context_text=context_text, parent=self.window())
+        self.chat_overlay.resize(500, 700)
+        self.chat_overlay.closed.connect(self.chat_overlay.close)
+        
+        # Center on screen
+        geo = self.window().geometry()
+        self.chat_overlay.move(geo.center() - self.chat_overlay.rect().center())
+        self.chat_overlay.show()
 
     def filter_notes(self):
         if self._is_updating: return
