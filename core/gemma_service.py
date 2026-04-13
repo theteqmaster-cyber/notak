@@ -49,8 +49,8 @@ class GemmaWorker(QObject):
             }
 
             full_response = ""
-            # Add a 5s connect timeout to avoid hanging if Ollama is down
-            with httpx.stream("POST", OLLAMA_CHAT_URL, json=payload, timeout=5.0) as response:
+            # Increase timeout to 30s to allow for "cold start" model loading
+            with httpx.stream("POST", OLLAMA_CHAT_URL, json=payload, timeout=30.0) as response:
                 if response.status_code != 200:
                     self.error.emit(f"Ollama error: {response.status_code}")
                     self.is_done = True
