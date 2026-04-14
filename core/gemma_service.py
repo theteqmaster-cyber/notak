@@ -41,8 +41,9 @@ class GemmaWorker(QObject):
                 "messages": messages,
                 "stream": True,
                 "options": {
-                    "temperature": 0.5,
-                    "top_p": 0.9,
+                    "temperature": 0.9,
+                    "top_p": 0.95,
+                    "top_k": 50,
                     "num_ctx": 4096,
                     "num_predict": -1 
                 }
@@ -92,15 +93,19 @@ class GemmaService:
 
     def get_recommendation_prompt(self, stats, recent_files):
         files_str = "\n".join([f"- {f.get('path')}" for f in recent_files[:3]])
+        categories = ["Science", "Philosophy", "Art", "Literature", "Imperial History", "Space Exploration"]
+        import time
+        chosen_cat = categories[int(time.time()) % len(categories)]
+        
         prompt = f"""
-        You are a concise study assistant. Using these stats {stats} and notes {files_str}, provide:
-        1. A one-sentence study tip. 
-        2. A short motivational quote.
+        You are a highly creative study assistant. Analyze these stats {stats} and notes {files_str}.
+        Provide:
+        1. A one-sentence study tip specific to the data. 
+        2. A fresh, unique motivational quote related to {chosen_cat}.
         
-        Format as: 
-        Tip: [sentence] | Quote: [quote]
-        
-        Keep total response under 30 words.
+        IMPORTANT: Never repeat a previous quote. Surprise me with something deep and imperial.
+        Format as: Tip: [sentence] | Quote: [quote]
+        Keep total response under 35 words.
         """
         return prompt
 

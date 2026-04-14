@@ -7,3 +7,4 @@ __pycache__/
 .notak_playlist
 .notak_playlist.json
 *.log
+.env

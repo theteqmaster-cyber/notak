@@ -16,3 +16,5 @@ xcffib==1.12.0
 mutagen
 supabase
 httpx
+google-genai
+python-dotenv

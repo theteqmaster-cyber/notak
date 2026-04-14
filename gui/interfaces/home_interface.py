@@ -55,10 +55,16 @@ class HomeInterface(ScrollArea):
         self.top_actions.addWidget(self.btn_search)
         
         self.btn_gemma = TransparentPushButton(FIF.CHAT, "Ask Gemma", self.view)
-        self.btn_gemma.setFixedSize(180, 40)
+        self.btn_gemma.setFixedSize(160, 40)
         self.btn_gemma.clicked.connect(self.open_gemma_chat)
         self.btn_gemma.setStyleSheet(self.btn_inspiration.styleSheet())
         self.top_actions.addWidget(self.btn_gemma)
+        
+        self.btn_ingracia = TransparentPushButton(FIF.PEOPLE, "Ask Ingracia", self.view)
+        self.btn_ingracia.setFixedSize(160, 40)
+        self.btn_ingracia.clicked.connect(self.open_ingracia_chat)
+        self.btn_ingracia.setStyleSheet(self.btn_inspiration.styleSheet())
+        self.top_actions.addWidget(self.btn_ingracia)
         
         self.vBoxLayout.addLayout(self.top_actions)
 
@@ -300,6 +306,15 @@ class HomeInterface(ScrollArea):
     def open_gemma_chat(self):
         from gui.components.gemma_chat_view import GemmaChatView
         self.chat_overlay = GemmaChatView(parent=self.window())
+        self.chat_overlay.closed.connect(self.chat_overlay.close)
+        self.chat_overlay.resize(500, 750)
+        geo = self.window().geometry()
+        self.chat_overlay.move(geo.center() - self.chat_overlay.rect().center())
+        self.chat_overlay.show()
+
+    def open_ingracia_chat(self):
+        from gui.components.ingracia_chat_view import IngraciaChatView
+        self.chat_overlay = IngraciaChatView(parent=self.window())
         self.chat_overlay.closed.connect(self.chat_overlay.close)
         self.chat_overlay.resize(500, 750)
         geo = self.window().geometry()

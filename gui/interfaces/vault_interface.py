@@ -192,7 +192,9 @@ class VaultInterface(QWidget):
         hero_layout.addStretch(1)
         
         # Right side: Actions integrated cleanly
-        self.btn_note = PrimaryPushButton(FIF.EDIT, "Take Note", self.hero_widget)
+        self.btn_ingracia = PrimaryPushButton(FIF.PEOPLE, "Ask Ingracia", self.hero_widget)
+        self.btn_ingracia.clicked.connect(self.launch_ingracia_with_context)
+        self.btn_note = PushButton(FIF.EDIT, "Take Note", self.hero_widget)
         self.btn_note.clicked.connect(self.take_note)
         self.btn_import = PushButton(FIF.DOWNLOAD, "Import PDF/Files", self.hero_widget)
         self.btn_import.clicked.connect(self.import_files_dialog)
@@ -200,10 +202,12 @@ class VaultInterface(QWidget):
         self.btn_refresh.clicked.connect(lambda: self.refresh_gallery(self.current_course(), self.search_bar.text()))
         
         button_style = "padding: 8px 16px; font-weight: bold;"
+        self.btn_ingracia.setStyleSheet(button_style + "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #8a2be2, stop:1 #ffd700); color: white;")
         self.btn_note.setStyleSheet(button_style)
         self.btn_import.setStyleSheet(button_style)
         self.btn_refresh.setStyleSheet(button_style)
 
+        hero_layout.addWidget(self.btn_ingracia)
         hero_layout.addWidget(self.btn_note)
         hero_layout.addWidget(self.btn_import)
         hero_layout.addWidget(self.btn_refresh)
@@ -412,3 +416,28 @@ class VaultInterface(QWidget):
                 duration=3500,
                 parent=self
             )
+
+    def launch_ingracia_with_context(self):
+        course = self.current_course()
+        files = get_files_for_course(course)
+        
+        # Phase Gamma+: Collect 8 most recent metadata entries irregardless of file type
+        recent_files = files[:8]
+        
+        metadata_lines = [f"METADATA_REASONING_MODE: {course}"]
+        for n in recent_files:
+            filename = os.path.basename(n['path'])
+            # Formatting for AI reasoning: Title | Date
+            date_str = n.get('created_at', 'Unknown Date')
+            metadata_lines.append(f"- File: {filename} (Modified: {date_str})")
+        
+        metadata_block = "\n".join(metadata_lines)
+        
+        from gui.components.ingracia_chat_view import IngraciaChatView
+        self.chat_overlay = IngraciaChatView(course_name=course, context_text=metadata_block, parent=self.window())
+        self.chat_overlay.closed.connect(self.chat_overlay.close)
+        self.chat_overlay.resize(500, 750)
+        
+        geo = self.window().geometry()
+        self.chat_overlay.move(geo.center() - self.chat_overlay.rect().center())
+        self.chat_overlay.show()

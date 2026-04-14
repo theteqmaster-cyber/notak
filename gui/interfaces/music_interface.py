@@ -118,10 +118,15 @@ class MusicInterface(QWidget):
         self.song_search.textChanged.connect(self.filter_playlist)
         header_h.addWidget(self.song_search)
         
+        self.btn_ingracia = TransparentPushButton(FIF.PEOPLE, "Celestial DJ")
+        self.btn_ingracia.setStyleSheet("padding: 8px 16px; font-weight: bold; background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #8a2be2, stop:1 #ffd700); color: white; border-radius: 8px;")
+        self.btn_ingracia.clicked.connect(self.launch_ingracia_music_chat)
+        
         self.btn_clear = TransparentPushButton(FIF.DELETE, "Clear")
         self.btn_clear.clicked.connect(self.clear_playlist)
         self.btn_add = PrimaryPushButton(FIF.MUSIC, "Import Music")
         self.btn_add.clicked.connect(self.import_music)
+        header_h.addWidget(self.btn_ingracia)
         header_h.addWidget(self.btn_clear)
         header_h.addWidget(self.btn_add)
         self.layout.addLayout(header_h)
@@ -404,3 +409,26 @@ class MusicInterface(QWidget):
                 item.setSizeHint(sw.sizeHint())
                 self.playlist_widget.addItem(item)
                 self.playlist_widget.setItemWidget(item, sw)
+
+    def launch_ingracia_music_chat(self):
+        data = self._read_playlist_data()
+        # Sort by play_count descending
+        data.sort(key=lambda x: x.get('play_count', 0), reverse=True)
+        top_8 = data[:8]
+        
+        metadata_lines = ["MUSIC_REASONING_MODE: Global Vibe"]
+        for entry in top_8:
+            title = os.path.basename(entry['path'])
+            count = entry.get('play_count', 0)
+            metadata_lines.append(f"- Track: {title} (Played {count} times)")
+        
+        metadata_block = "\n".join(metadata_lines)
+        
+        from gui.components.ingracia_chat_view import IngraciaChatView
+        self.chat_overlay = IngraciaChatView(context_text=metadata_block, parent=self.window())
+        self.chat_overlay.closed.connect(self.chat_overlay.close)
+        self.chat_overlay.resize(500, 750)
+        
+        geo = self.window().geometry()
+        self.chat_overlay.move(geo.center() - self.chat_overlay.rect().center())
+        self.chat_overlay.show()
