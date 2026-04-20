@@ -311,3 +311,9 @@ class GemmaChatView(QWidget):
             self.status_lbl.setText("● STOPPED")
             self.status_lbl.setStyleSheet("color: #ff4444; font-weight: bold; letter-spacing: 1.5px; font-size: 8px;")
             self.btn_stop.hide()
+
+    def closeEvent(self, event):
+        self.stop_generation()
+        self.polling_timer.stop()
+        self._cleanup_thread()
+        super().closeEvent(event)

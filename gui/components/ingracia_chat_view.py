@@ -323,6 +323,12 @@ class IngraciaChatView(QWidget):
             self.status_lbl.setStyleSheet("color: #ff4444; font-weight: bold; letter-spacing: 1.5px; font-size: 8px;")
             self.btn_stop.hide()
 
+    def closeEvent(self, event):
+        self.stop_generation()
+        self.polling_timer.stop()
+        self._cleanup_thread()
+        super().closeEvent(event)
+
     def generate_intelligent_greeting(self):
         """Phase Omega: Multimodal reasoning for different Hubs"""
         now = datetime.datetime.now().strftime("%Y-%m-%d")

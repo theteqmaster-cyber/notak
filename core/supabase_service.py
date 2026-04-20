@@ -1,5 +1,6 @@
 import os
 import json
+import datetime
 from supabase import create_client, Client
 
 # Credentials
@@ -112,3 +113,25 @@ class SupabaseService:
         except Exception as e:
             print(f"Error updating note: {e}")
             return None
+
+    def get_timetable(self):
+        """Fetch today's classes from the timetable_entries table."""
+        try:
+            # Python weekday is 0=Mon, 6=Sun. Table day_of_week is likely 1=Mon, 7=Sun.
+            day_of_week = datetime.datetime.now().weekday() + 1
+            response = self.client.table("timetable_entries").select("*").eq("day_of_week", day_of_week).order("start_time").execute()
+            return response.data
+        except Exception as e:
+            print(f"Error fetching timetable: {e}")
+            return []
+
+    def get_calendar_events(self):
+        """Fetch today's calendar events from Supabase."""
+        try:
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            # Using the cloud calendar_events table
+            response = self.client.table("calendar_events").select("*").eq("event_date", today).execute()
+            return response.data
+        except Exception as e:
+            print(f"Error fetching calendar events: {e}")
+            return []

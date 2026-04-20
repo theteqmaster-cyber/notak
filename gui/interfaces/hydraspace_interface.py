@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtCore import Qt, QSize, Signal, QTimer
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QStackedWidget, QListWidgetItem
 from qfluentwidgets import (SubtitleLabel, BodyLabel, CaptionLabel, SearchLineEdit, 
                             Pivot, FluentIcon as FIF, TransparentPushButton, PrimaryPushButton,
@@ -10,6 +10,8 @@ from gui.components.login_view import LoginView
 from gui.zen_writer import ZenWriter
 from gui.components.marquee_label import MarqueeLabel
 from gui.components.gemma_chat_view import GemmaChatView
+import datetime
+import re
 
 class NoteCard(CardWidget):
     def __init__(self, note_data, parent=None):
@@ -81,6 +83,200 @@ class NoteCard(CardWidget):
             p = p.parent()
         if p: p.display_note(self.note_data)
 
+class MiniTimetableCard(CardWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(140)
+        self.setStyleSheet("CardWidget { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; }")
+        
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(15, 12, 15, 12)
+        self.layout.setSpacing(8)
+        
+        hdr = QHBoxLayout()
+        icon = IconWidget(FIF.CALENDAR)
+        icon.setFixedSize(14, 14)
+        icon.setStyleSheet("color: #00ffaa;")
+        title = CaptionLabel("TODAY'S CLASSES")
+        title.setStyleSheet("color: #00ffaa; font-weight: bold; letter-spacing: 1px;")
+        hdr.addWidget(icon)
+        hdr.addWidget(title)
+        hdr.addStretch()
+        self.layout.addLayout(hdr)
+        
+        self.scroll = ScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("background: transparent; border: none;")
+        self.content_widget = QWidget()
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(5)
+        self.content_layout.setAlignment(Qt.AlignTop)
+        self.scroll.setWidget(self.content_widget)
+        self.layout.addWidget(self.scroll)
+        
+    def set_data(self, classes):
+        while self.content_layout.count():
+            item = self.content_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+            
+        if not classes:
+            lbl = CaptionLabel("No classes today.")
+            lbl.setStyleSheet("color: rgba(255, 255, 255, 0.3);")
+            self.content_layout.addWidget(lbl)
+        else:
+            for c in classes:
+                item_v = QVBoxLayout()
+                item_v.setSpacing(0)
+                name = BodyLabel(c.get('title', 'Unknown'))
+                name.setStyleSheet("color: white; font-size: 13px; font-weight: bold;")
+                time = CaptionLabel(f"{c.get('start_time', '')} - {c.get('end_time', '')}")
+                time.setStyleSheet("color: rgba(255, 255, 255, 0.5); font-size: 11px;")
+                item_v.addWidget(name)
+                item_v.addWidget(time)
+                self.content_layout.addLayout(item_v)
+
+class MiniEventsCard(CardWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(120)
+        self.setStyleSheet("CardWidget { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; }")
+        
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(15, 12, 15, 12)
+        self.layout.setSpacing(8)
+        
+        hdr = QHBoxLayout()
+        icon = IconWidget(FIF.COMPLETED)
+        icon.setFixedSize(14, 14)
+        icon.setStyleSheet("color: #ffaa00;")
+        title = CaptionLabel("CALENDAR EVENTS")
+        title.setStyleSheet("color: #ffaa00; font-weight: bold; letter-spacing: 1px;")
+        hdr.addWidget(icon)
+        hdr.addWidget(title)
+        hdr.addStretch()
+        self.layout.addLayout(hdr)
+        
+        self.scroll = ScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("background: transparent; border: none;")
+        self.content_widget = QWidget()
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(5)
+        self.content_layout.setAlignment(Qt.AlignTop)
+        self.scroll.setWidget(self.content_widget)
+        self.layout.addWidget(self.scroll)
+        
+    def set_data(self, events):
+        while self.content_layout.count():
+            item = self.content_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+            
+        if not events:
+            lbl = CaptionLabel("No events today.")
+            lbl.setStyleSheet("color: rgba(255, 255, 255, 0.3);")
+            self.content_layout.addWidget(lbl)
+        else:
+            for ev in events:
+                l = BodyLabel(f"• {ev.get('title', 'Event')}")
+                l.setStyleSheet("color: #ddd; font-size: 12px;")
+                l.setWordWrap(True)
+                self.content_layout.addWidget(l)
+
+class MiniMusicCard(CardWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(120)
+        self.setStyleSheet("CardWidget { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; }")
+        
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(15, 12, 15, 12)
+        self.layout.setSpacing(8)
+        
+        hdr = QHBoxLayout()
+        icon = IconWidget(FIF.MUSIC)
+        icon.setFixedSize(14, 14)
+        icon.setStyleSheet("color: #00ffaa;")
+        title = CaptionLabel("NOW PLAYING")
+        title.setStyleSheet("color: #00ffaa; font-weight: bold; letter-spacing: 1px;")
+        hdr.addWidget(icon)
+        hdr.addWidget(title)
+        hdr.addStretch()
+        self.layout.addLayout(hdr)
+        
+        self.marquee = MarqueeLabel("No Track Selected")
+        self.marquee.setStyleSheet("color: white; font-weight: bold; font-size: 13px;")
+        self.layout.addWidget(self.marquee)
+        
+        controls = QHBoxLayout()
+        controls.setAlignment(Qt.AlignCenter)
+        controls.setSpacing(15)
+        
+        self.btn_prev = TransparentPushButton(FIF.SKIP_BACK, "")
+        self.btn_prev.setFixedSize(32, 32)
+        self.btn_play = TransparentPushButton(FIF.PLAY, "")
+        self.btn_play.setFixedSize(32, 32)
+        self.btn_next = TransparentPushButton(FIF.SKIP_FORWARD, "")
+        self.btn_next.setFixedSize(32, 32)
+        
+        controls.addWidget(self.btn_prev)
+        controls.addWidget(self.btn_play)
+        controls.addWidget(self.btn_next)
+        self.layout.addLayout(controls)
+        
+        self.btn_prev.clicked.connect(self._prev)
+        self.btn_next.clicked.connect(self._next)
+        self.btn_play.clicked.connect(self._toggle_play)
+        
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self.sync_state)
+        self.update_timer.start(1000)
+
+    def get_music_interface(self):
+        w = self.window()
+        if hasattr(w, 'musicInterface'): return w.musicInterface
+        return None
+
+    def _prev(self):
+        mi = self.get_music_interface()
+        if mi: mi.play_previous()
+
+    def _next(self):
+        mi = self.get_music_interface()
+        if mi: mi.play_next_manual()
+
+    def _toggle_play(self):
+        mi = self.get_music_interface()
+        if mi:
+            from PySide6.QtMultimedia import QMediaPlayer
+            if mi.player.playbackState() == QMediaPlayer.PlayingState:
+                mi.player.pause()
+            else:
+                mi.player.play()
+
+    def sync_state(self):
+        mi = self.get_music_interface()
+        if not mi: return
+        
+        from PySide6.QtMultimedia import QMediaPlayer
+        state = mi.player.playbackState()
+        
+        if state == QMediaPlayer.PlayingState:
+            self.btn_play.setIcon(FIF.PAUSE)
+        else:
+            self.btn_play.setIcon(FIF.PLAY)
+            
+        if hasattr(mi.track_name_label, 'text_content'):
+            song_lbl = mi.track_name_label.text_content
+        else:
+            song_lbl = "No Track Selected"
+            
+        if song_lbl and song_lbl != "No Track Selected":
+            self.marquee.setText(song_lbl)
+        else:
+            self.marquee.setText("Hub Stopped")
+
 class HydraSpaceInterface(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -119,6 +315,15 @@ class HydraSpaceInterface(QWidget):
         self.course_list.currentItemChanged.connect(self.on_course_selected)
         sidebar_layout.addWidget(self.course_list)
         
+        sidebar_layout.addSpacing(20)
+        
+        self.timetable_card = MiniTimetableCard()
+        self.events_card = MiniEventsCard()
+        self.music_card = MiniMusicCard()
+        sidebar_layout.addWidget(self.timetable_card)
+        sidebar_layout.addWidget(self.events_card)
+        sidebar_layout.addWidget(self.music_card)
+        
         sidebar_layout.addStretch(1)
         self.btn_logout = TransparentPushButton(FIF.CLOSE, "Sign Out")
         self.btn_logout.clicked.connect(self.handle_logout)
@@ -137,9 +342,49 @@ class HydraSpaceInterface(QWidget):
         browser_layout.addWidget(self.header)
         
         self.search_bar = SearchLineEdit()
-        self.search_bar.textChanged.connect(lambda: self.filter_notes())
+        self.search_bar.setPlaceholderText("Search notes...")
+        self.search_bar.textChanged.connect(self.filter_notes)
         browser_layout.addWidget(self.search_bar)
         
+        # New Tool Row: Take Note, Ask Ingracia, Ask Gemma
+        tool_row = QHBoxLayout()
+        tool_row.setSpacing(8)
+        
+        button_style = """
+            TransparentPushButton {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                padding: 5px 10px;
+                font-size: 11px;
+                font-weight: 600;
+                color: rgba(255, 255, 255, 0.8);
+            }
+            TransparentPushButton:hover {
+                background: rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                color: white;
+            }
+        """
+        
+        self.btn_new_note = TransparentPushButton(FIF.ADD, "Note")
+        self.btn_new_note.setStyleSheet(button_style)
+        self.btn_new_note.clicked.connect(self.handle_new_note)
+        
+        self.btn_ask_ingracia = TransparentPushButton(FIF.PEOPLE, "Ingracia")
+        self.btn_ask_ingracia.setStyleSheet(button_style.replace("0.1);", "0.2); border-color: rgba(138, 43, 226, 0.3);"))
+        self.btn_ask_ingracia.clicked.connect(self.launch_ingracia_chat)
+        
+        self.btn_ask_gemma = TransparentPushButton(FIF.CHAT, "Gemma")
+        self.btn_ask_gemma.setStyleSheet(button_style)
+        self.btn_ask_gemma.clicked.connect(self.open_course_gemma_chat)
+        
+        tool_row.addWidget(self.btn_new_note)
+        tool_row.addWidget(self.btn_ask_ingracia)
+        tool_row.addWidget(self.btn_ask_gemma)
+        browser_layout.addLayout(tool_row)
+        
+        # Pivot Row (Below Tools)
         pivot_h = QHBoxLayout()
         self.pivot = Pivot()
         self.pivot.addItem("all", "All")
@@ -148,18 +393,15 @@ class HydraSpaceInterface(QWidget):
         self.pivot.addItem("key concept", "Key Concepts")
         self.pivot.setCurrentItem("all")
         self.pivot.currentItemChanged.connect(lambda: self.filter_notes())
+        
+        # Style pivot to be smaller
+        self.pivot.setStyleSheet("""
+            Pivot { background: transparent; }
+            PivotItem { font-size: 11px; padding: 5px 10px; }
+        """)
+        
         pivot_h.addWidget(self.pivot)
         pivot_h.addStretch(1)
-        
-        self.btn_new_note = TransparentPushButton(FIF.ADD, "")
-        self.btn_new_note.clicked.connect(self.handle_new_note)
-        pivot_h.addWidget(self.btn_new_note)
-        
-        self.btn_ask_gemma = TransparentPushButton(FIF.CHAT, "")
-        self.btn_ask_gemma.setToolTip("Ask Gemma about this course")
-        self.btn_ask_gemma.clicked.connect(self.open_course_gemma_chat)
-        pivot_h.addWidget(self.btn_ask_gemma)
-        
         browser_layout.addLayout(pivot_h)
         
         self.scroll_area = ScrollArea()
@@ -239,19 +481,29 @@ class HydraSpaceInterface(QWidget):
         
         if self.supabase.is_authenticated():
             self.stacked_widget.setCurrentIndex(1)
-            self.load_initial_data()
+            # Defer loading to showEvent to avoid blocking main window startup
         else:
             self.stacked_widget.setCurrentIndex(0)
 
     def on_login_success(self):
         self.stacked_widget.setCurrentIndex(1)
         self.load_initial_data()
+        self.refresh_sidebar_data()
+
+    def refresh_sidebar_data(self):
+        """Update timetable and events in the sidebar."""
+        classes = self.supabase.get_timetable()
+        self.timetable_card.set_data(classes)
+        
+        events = self.supabase.get_calendar_events()
+        self.events_card.set_data(events)
 
     def handle_logout(self):
         self.supabase.sign_out()
         self.stacked_widget.setCurrentIndex(0)
 
     def load_initial_data(self):
+        self.refresh_sidebar_data()
         self.all_courses = self.supabase.get_courses()
         self.course_list.clear()
         all_item = QListWidgetItem("🌍 All Library")
@@ -319,8 +571,36 @@ class HydraSpaceInterface(QWidget):
         if ctype == "all": ctype = "lecture"
         new_note = self.supabase.create_note("New Fragment", cid, ctype)
         if new_note:
+            # Bug Fix: Ensure new note is tracked locally
+            self.current_notes.insert(0, new_note)
+            self.filter_notes()
+            
             self.selected_note = new_note
             self.open_zen_editor()
+
+    def launch_ingracia_chat(self):
+        """Standalone Ingracia launch for cloud course context."""
+        current_course = self.course_list.currentItem()
+        if not current_course: return
+        course_name = current_course.text().split('📚 ')[-1]
+        
+        context_parts = []
+        for note in self.current_notes[:3]:
+            title = note.get('title', 'Untitled')
+            # Rudimentary HTML strip
+            clean_content = re.sub('<[^<]+?>', '', note.get('content', ''))
+            context_parts.append(f"### {title}\n{clean_content[:500]}")
+        
+        from gui.components.ingracia_chat_view import IngraciaChatView
+        self.chat_overlay = IngraciaChatView(
+            course_name=course_name, 
+            context_text="\n\n".join(context_parts),
+            parent=self.window()
+        )
+        self.chat_overlay.resize(500, 750)
+        geo = self.window().geometry()
+        self.chat_overlay.move(geo.center() - self.chat_overlay.rect().center())
+        self.chat_overlay.show()
 
     def open_course_gemma_chat(self):
         current_course = self.course_list.currentItem()
@@ -379,5 +659,7 @@ class HydraSpaceInterface(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if self.supabase.is_authenticated() and not self.all_courses:
-            self.load_initial_data()
+        # Only load if we haven't already or if we are authenticated
+        if self.supabase.is_authenticated():
+            # Use singleShot to ensure the UI is rendered before heavy fetching starts
+            QTimer.singleShot(100, self.load_initial_data)
