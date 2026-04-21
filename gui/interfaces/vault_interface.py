@@ -232,7 +232,7 @@ class MiniWeatherCard(CardWidget):
             self.icon_widget.setIcon(FIF.BRIGHTNESS)
             self.icon_widget.setStyleSheet("color: #F1C40F;")
         elif "rain" in d or "drizzle" in d or "shower" in d:
-            self.icon_widget.setIcon(FIF.RAIN)
+            self.icon_widget.setIcon(FIF.CLOUD)
             self.icon_widget.setStyleSheet("color: #4A90E2;")
         else:
             self.icon_widget.setIcon(FIF.CLOUD)
