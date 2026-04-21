@@ -178,6 +178,9 @@ class MiniMusicCard(CardWidget):
 class WeatherWorker(QThread):
     finished = Signal(str, str)
     
+    def __init__(self, parent=None):
+        super().__init__(parent)
+    
     def run(self):
         try:
             req = urllib.request.Request(
@@ -219,7 +222,7 @@ class MiniWeatherCard(CardWidget):
         self.layout.addLayout(info)
         self.layout.addStretch()
         
-        self.worker = WeatherWorker()
+        self.worker = WeatherWorker(self)
         self.worker.finished.connect(self.update_weather)
         self.worker.start()
         

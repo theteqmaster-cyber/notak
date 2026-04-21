@@ -26,8 +26,6 @@ class MainWindow(FluentWindow):
 
     def __init__(self):
         super().__init__()
-        initialize_db()
-        purge_old_deleted_items(30)
         self.initWindow()
 
         # Background Layer
