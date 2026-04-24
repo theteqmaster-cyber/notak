@@ -250,8 +250,8 @@ class IngraciaChatView(QWidget):
         self.input_edit.clear()
         self.add_message(text, is_user=True)
         
-        from core.gemini_service import GeminiService
-        service = GeminiService()
+        from core.groq_service import GroqService
+        service = GroqService()
         self.status_lbl.setText("● CONSULTING...")
         self.status_lbl.setStyleSheet("color: #ffd700; font-weight: bold; letter-spacing: 1.5px; font-size: 8px;")
         
@@ -362,8 +362,8 @@ class IngraciaChatView(QWidget):
         
         self._current_bubble = self.add_message("", is_user=False)
         
-        from core.gemini_service import GeminiService
-        service = GeminiService()
+        from core.groq_service import GroqService
+        service = GroqService()
         thread, worker = service.get_chat_thread(reasoning_prompt, system_prompt, [])
         
         self._current_worker = worker

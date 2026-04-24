@@ -18,3 +18,4 @@ supabase
 httpx
 google-genai
 python-dotenv
+groq
