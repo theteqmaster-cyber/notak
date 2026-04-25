@@ -27,13 +27,26 @@ class GroqWorker(QObject):
         self.is_running = False
 
     def run(self):
+        if not GROQ_API_KEY:
+            self.error_msg = "Groq API Key is missing. Please check your .env file."
+            self.error.emit(self.error_msg)
+            self.is_done = True
+            self.finished.emit("")
+            return
+
         try:
-            # Using Llama 3.3 for maximum speed and intelligence
-            model_id = 'llama-3.3-70b-versatile'
-            url = "https://api.groq.com/openai/v1/chat/completions"
+            # Auto-detect OpenAI vs Groq
+            is_openai = GROQ_API_KEY.startswith("sk-")
+            if is_openai:
+                model_id = 'gpt-4o'
+                url = "https://api.openai.com/v1/chat/completions"
+            else:
+                # Using Llama 3.3 for maximum speed and intelligence
+                model_id = 'llama-3.3-70b-versatile'
+                url = "https://api.groq.com/openai/v1/chat/completions"
             
             headers = {
-                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Authorization": f"Bearer {GROQ_API_KEY.strip()}",
                 "Content-Type": "application/json"
             }
             

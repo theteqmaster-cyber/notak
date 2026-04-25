@@ -1,11 +1,13 @@
 import json
 import httpx
 import os
+from dotenv import load_dotenv
 from PySide6.QtCore import QObject, Signal, QThread
 
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
-OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
-MODEL_NAME = "gemma:2b"
+# SECURITY: Load API key from environment
+load_dotenv()
+# Redirect to Groq API Key as requested
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 class GemmaWorker(QObject):
     finished = Signal(str)
@@ -26,7 +28,29 @@ class GemmaWorker(QObject):
         self.is_running = False
 
     def run(self):
+        if not GROQ_API_KEY:
+            self.error_msg = "Groq API Key is missing. Please check your .env file."
+            self.error.emit(self.error_msg)
+            self.is_done = True
+            self.finished.emit("")
+            return
+
         try:
+            # Auto-detect OpenAI vs Groq
+            is_openai = GROQ_API_KEY.startswith("sk-")
+            if is_openai:
+                model_id = 'gpt-4o'
+                url = "https://api.openai.com/v1/chat/completions"
+            else:
+                # Using Llama 3.3 via Groq for high speed and intelligence
+                model_id = 'llama-3.3-70b-versatile'
+                url = "https://api.groq.com/openai/v1/chat/completions"
+            
+            headers = {
+                "Authorization": f"Bearer {GROQ_API_KEY.strip()}",
+                "Content-Type": "application/json"
+            }
+            
             messages = []
             if self.system_prompt:
                 messages.append({"role": "system", "content": self.system_prompt})
@@ -37,45 +61,54 @@ class GemmaWorker(QObject):
             messages.append({"role": "user", "content": self.prompt})
 
             payload = {
-                "model": MODEL_NAME,
+                "model": model_id,
                 "messages": messages,
-                "stream": True,
-                "options": {
-                    "temperature": 0.9,
-                    "top_p": 0.95,
-                    "top_k": 50,
-                    "num_ctx": 4096,
-                    "num_predict": -1 
-                }
+                "temperature": 0.9,
+                "stream": True
             }
 
             full_response = ""
-            # Increase timeout to 30s to allow for "cold start" model loading
-            with httpx.stream("POST", OLLAMA_CHAT_URL, json=payload, timeout=30.0) as response:
+            with httpx.stream("POST", url, headers=headers, json=payload, timeout=60.0) as response:
                 if response.status_code != 200:
-                    self.error.emit(f"Ollama error: {response.status_code}")
+                    error_content = response.read().decode()
+                    try:
+                        error_json = json.loads(error_content)
+                        self.error_msg = error_json.get("error", {}).get("message", "Unknown error")
+                    except:
+                        self.error_msg = f"Groq Error {response.status_code}: {error_content}"
+                    
+                    self.error.emit(self.error_msg)
                     self.is_done = True
                     return
-                # Increase timeout for streaming chunks to 30s
-                response.read_timeout = 30.0
 
                 for line in response.iter_lines():
                     if not self.is_running:
                         break
-                    if line:
-                        chunk = json.loads(line)
-                        if "message" in chunk and "content" in chunk["message"]:
-                            content = chunk["message"]["content"]
-                            full_response += content
-                            self.output_buffer.append(content)
-                        if chunk.get("done"):
-                            self.is_done = True
-                            break
+                    
+                    if not line:
+                        continue
+                    
+                    if line.startswith("data: "):
+                        line = line[6:]
+                    
+                    if line == "[DONE]":
+                        break
+                    
+                    try:
+                        data = json.loads(line)
+                        if "choices" in data and len(data["choices"]) > 0:
+                            content = data["choices"][0].get("delta", {}).get("content", "")
+                            if content:
+                                full_response += content
+                                self.output_buffer.append(content)
+                                self.chunk_received.emit(content)
+                    except (json.JSONDecodeError, KeyError):
+                        continue
 
             self.is_done = True
             self.finished.emit(full_response)
         except Exception as e:
-            msg = f"Connection error: {str(e)}"
+            msg = f"Groq Connection Severed: {str(e)}"
             self.error_msg = msg
             self.error.emit(msg)
             self.is_done = True
