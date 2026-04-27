@@ -66,6 +66,13 @@ class HomeInterface(ScrollArea):
         self.btn_ingracia.setStyleSheet(self.btn_inspiration.styleSheet())
         self.top_actions.addWidget(self.btn_ingracia)
         
+        self.top_actions.addStretch()
+        
+        from gui.interfaces.vault_interface import MiniWeatherCard, MiniMusicCard
+        self.weather_card = MiniWeatherCard(self.view)
+        self.weather_card.setFixedWidth(200)
+        self.top_actions.addWidget(self.weather_card)
+        
         self.vBoxLayout.addLayout(self.top_actions)
 
         self.vBoxLayout.addSpacing(70)
@@ -83,6 +90,14 @@ class HomeInterface(ScrollArea):
         self.date_label = SubtitleLabel("", self.view)
         self.date_label.setAlignment(Qt.AlignCenter)
         self.vBoxLayout.addWidget(self.date_label)
+        
+        self.vBoxLayout.addSpacing(10)
+        self.music_card = MiniMusicCard(self.view)
+        self.music_card.setFixedWidth(300)
+        # Make the background transparent so it looks seamless under the clock
+        self.music_card.setStyleSheet("CardWidget { background: transparent; border: none; }")
+        self.vBoxLayout.addWidget(self.music_card, alignment=Qt.AlignCenter)
+        
         self.vBoxLayout.addSpacing(30)
         
         # Search Bar

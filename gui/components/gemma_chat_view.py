@@ -5,6 +5,20 @@ from qfluentwidgets import (SubtitleLabel, BodyLabel, CaptionLabel,
                              TransparentPushButton, FluentIcon as FIF, 
                              CardWidget, IconWidget, ScrollArea)
 import datetime
+import random
+
+LUTHERAN_VERSES = [
+    "“For by grace you have been saved through faith. And this is not your own doing; it is the gift of God, not a result of works, so that no one may boast.” – Ephesians 2:8-9",
+    "“The Lord is my shepherd; I shall not want. He makes me lie down in green pastures. He leads me beside still waters. He restores my soul.” – Psalm 23:1-3",
+    "“Do not be anxious about anything, but in everything by prayer and supplication with thanksgiving let your requests be made known to God.” – Philippians 4:6",
+    "“For I am sure that neither death nor life, nor angels nor rulers, nor things present nor things to come, nor powers, nor height nor depth, nor anything else in all creation, will be able to separate us from the love of God in Christ Jesus our Lord.” – Romans 8:38-39",
+    "“Trust in the Lord with all your heart, and do not lean on your own understanding. In all your ways acknowledge him, and he will make straight your paths.” – Proverbs 3:5-6",
+    "“Come to me, all who labor and are heavy laden, and I will give you rest.” – Matthew 11:28",
+    "“Therefore, since we have been justified by faith, we have peace with God through our Lord Jesus Christ.” – Romans 5:1",
+    "“Be strong and courageous. Do not be frightened, and do not be dismayed, for the Lord your God is with you wherever you go.” – Joshua 1:9",
+    "“And we know that for those who love God all things work together for good, for those who are called according to his purpose.” – Romans 8:28",
+    "“The steadfast love of the Lord never ceases; his mercies never come to an end; they are new every morning; great is your faithfulness.” – Lamentations 3:22-23"
+]
 
 class MessageBubble(QFrame):
     def __init__(self, text, is_user=True, is_error=False, parent=None):
@@ -87,9 +101,9 @@ class GemmaChatView(QWidget):
         self.setup_ui()
         
         if course_name:
-            self.add_message(f"Hi! I've scanned your **{course_name}** notes. How can I help you today?", is_user=False)
+            self.add_message(f"Peace be with you. I have surveyed your notes on **{course_name}**. How may I guide your studies and spirit today?<br><br><i>{random.choice(LUTHERAN_VERSES)}</i>", is_user=False)
         else:
-            self.add_message("Hi! I'm Gemma, your offline AI assistant. Ask me anything!", is_user=False)
+            self.add_message(f"Peace be with you. I am Gemma, an apostle here to guide your studies and your spirit.<br><br><i>{random.choice(LUTHERAN_VERSES)}</i>", is_user=False)
 
     def setup_ui(self):
         self.main_layout = QVBoxLayout(self)
@@ -241,9 +255,15 @@ class GemmaChatView(QWidget):
         self.status_lbl.setText("● THINKING...")
         self.status_lbl.setStyleSheet("color: #ffaa00; font-weight: bold; letter-spacing: 1.5px; font-size: 8px;")
         
-        system_prompt = "You are Gemma, a complete offline assistant. Always finish your thoughts fully."
+        system_prompt = (
+            "You are Gemma, a dramatic, deep, and wise apostle and spiritual mentor based on Christianity and Lutheran teachings. "
+            "Your core aim is to guide the user, make them grow spiritually, and encourage them to be kind and read the Bible. "
+            "Maintain a warm, dramatic, and deeply spiritual persona. Provide Lutheran perspectives gracefully. "
+            "Do not act like a generic AI assistant. Act strictly as the spiritual mentor. "
+            "Always finish your thoughts fully."
+        )
         if self.course_name and self.context_text:
-            system_prompt += f" Notes context: {self.context_text}"
+            system_prompt += f" The user is studying: {self.course_name}. Notes context: {self.context_text}"
         
         self._current_bubble = self.add_message("", is_user=False)
         thread, worker = service.get_chat_thread(text, system_prompt, self.history[:-1])

@@ -414,9 +414,19 @@ class VaultInterface(QWidget):
         sidebar_layout = QVBoxLayout(self.course_sidebar)
         sidebar_layout.setContentsMargins(15, 30, 15, 15)
         
+        header_h = QHBoxLayout()
         cat_lbl = CaptionLabel("STUDY HUB")
         cat_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.3); font-weight: bold; padding-left: 10px;")
-        sidebar_layout.addWidget(cat_lbl)
+        
+        self.btn_new_course = TransparentPushButton(FIF.ADD, "")
+        self.btn_new_course.setToolTip("Create New Course")
+        self.btn_new_course.setFixedSize(30, 30)
+        self.btn_new_course.clicked.connect(self.add_new_course)
+        
+        header_h.addWidget(cat_lbl)
+        header_h.addStretch()
+        header_h.addWidget(self.btn_new_course)
+        sidebar_layout.addLayout(header_h)
         
         self.course_list = ListWidget()
         self.course_list.setStyleSheet("background: transparent; border: none;")
@@ -439,9 +449,6 @@ class VaultInterface(QWidget):
         sidebar_layout.addLayout(self.mini_dashboard)
         
         sidebar_layout.addStretch(1)
-        self.btn_new_course = TransparentPushButton(FIF.ADD, "New Course")
-        self.btn_new_course.clicked.connect(self.add_new_course)
-        sidebar_layout.addWidget(self.btn_new_course)
         self.main_layout.addWidget(self.course_sidebar)
         
         # --- 2. FILES BROWSER (Middle) ---
@@ -536,6 +543,11 @@ class VaultInterface(QWidget):
         title_v.addWidget(self.v_info)
         v_header.addLayout(title_v)
         v_header.addStretch(1)
+        self.btn_edit_note = PushButton(FIF.EDIT, "Edit Note")
+        self.btn_edit_note.clicked.connect(self.edit_current_note)
+        self.btn_edit_note.hide()
+        v_header.addWidget(self.btn_edit_note)
+        
         self.btn_open_external = PrimaryPushButton(FIF.DOCUMENT, "Open Externally")
         self.btn_open_external.clicked.connect(self.open_current_external)
         v_header.addWidget(self.btn_open_external)
@@ -674,6 +686,11 @@ class VaultInterface(QWidget):
         self.v_title.setText(display_name)
         self.v_info.setText(f"{cat} • {suffix if suffix else 'File'} • {file_data.get('created_at', '')[:10]}")
         
+        if cat == 'Notes' or cat == 'Text' or file_path.endswith(('.md', '.txt')):
+            self.btn_edit_note.show()
+        else:
+            self.btn_edit_note.hide()
+        
         self.clear_big_preview()
         
         if cat == 'Notes' or cat == 'Text' or file_path.endswith(('.md', '.txt', '.csv')):
@@ -727,6 +744,22 @@ class VaultInterface(QWidget):
                 subprocess.Popen(['xdg-open', self.selected_file_data['path']])
             except Exception as e:
                 print(f"Error opening file externally: {e}")
+
+    def edit_current_note(self):
+        if not self.selected_file_data: return
+        cid = self.current_course()
+        if cid == "all":
+            cid = self.selected_file_data.get("course", "Uncategorized")
+            
+        self.content_stack.setCurrentIndex(2)
+        while self.zen_container.count():
+            item = self.zen_container.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+                
+        self.current_zen_editor = ZenWriter(cid, existing_file_data=self.selected_file_data)
+        self.current_zen_editor.saveCompleted.connect(self.reload_current_course)
+        self.zen_container.addWidget(self.current_zen_editor)
 
     def close_zen_editor(self):
         self.content_stack.setCurrentIndex(1)
