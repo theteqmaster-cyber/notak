@@ -96,7 +96,6 @@ class MainWindow(FluentWindow):
         # Dark theme
         setTheme(Theme.DARK)
         self.setObjectName("NotakWindow")
-        self.setAttribute(Qt.WA_TranslucentBackground)
 
     def setBackgroundImage(self, image_path):
         if not os.path.exists(image_path):

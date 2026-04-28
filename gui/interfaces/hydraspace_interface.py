@@ -452,7 +452,7 @@ class HydraSpaceInterface(QWidget):
         
         self.note_viewer = TextBrowser()
         self.note_viewer.setReadOnly(True)
-        self.note_viewer.setStyleSheet("background: transparent; border: none; font-size: 18px; color: #e0e0e0;")
+        self.note_viewer.setStyleSheet("background: transparent; border: none; font-size: 18px; color: #e0e0e0; padding: 20px;")
         viewer_layout.addWidget(self.note_viewer)
         self.content_stack.addWidget(self.viewer_page)
         
@@ -529,8 +529,7 @@ class HydraSpaceInterface(QWidget):
         self.content_stack.setCurrentIndex(1)
         self.v_title.setText(note.get('title'))
         self.v_info.setText(f"{note.get('type')} • {note.get('created_at', '')[:10]}")
-        html = f"<div style='color: #eee; line-height: 1.8; padding: 20px;'>{note.get('content', 'No content.')}</div>"
-        self.note_viewer.setHtml(html)
+        self.note_viewer.setMarkdown(note.get('content', 'No content.'))
 
     def open_zen_editor(self):
         if not self.selected_note: return
@@ -550,8 +549,7 @@ class HydraSpaceInterface(QWidget):
         
         # Real-time viewer patch
         self.v_title.setText(note_data.get('title'))
-        html = f"<div style='color: #eee; line-height: 1.8; padding: 20px;'>{note_data.get('content', 'No content.')}</div>"
-        self.note_viewer.setHtml(html)
+        self.note_viewer.setMarkdown(note_data.get('content', 'No content.'))
         
         # Patch the note item in the list browser without full reload
         for i in range(self.notes_layout.count()):
