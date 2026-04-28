@@ -20,7 +20,8 @@ from gui.interfaces.about_interface import AboutInterface
 from gui.interfaces.games_interface import GamesInterface
 from gui.interfaces.radio_interface import RadioInterface
 from gui.interfaces.hydraspace_interface import HydraSpaceInterface
-from core.database import initialize_db, purge_old_deleted_items
+from gui.interfaces.session_interface import SessionInterface
+from core.database import initialize_db, purge_old_deleted_items, insert_session
 
 class MainWindow(FluentWindow):
 
@@ -48,15 +49,30 @@ class MainWindow(FluentWindow):
         self.gamesInterface = GamesInterface(self)
         self.radioInterface = RadioInterface(self)
         self.hydraInterface = HydraSpaceInterface(self)
+        self.sessionInterface = SessionInterface(self)
+        
+        self.sessionInterface.sessionStarted.connect(self.start_session_timer)
+        self.sessionInterface.sessionCancelled.connect(self.cancel_session_timer)
+        
+        # Title bar session timer
+        self.session_clock = SubtitleLabel("00:00", self)
+        self.session_clock.setStyleSheet("color: rgba(255, 255, 255, 0.3); font-size: 14px; margin-left: 20px; font-weight: bold;")
         
         # Title bar clock
         self.title_clock = SubtitleLabel(QTime.currentTime().toString("HH:mm"), self)
-        self.title_clock.setStyleSheet("color: rgba(255, 255, 255, 0.5); font-size: 14px; margin-left: 20px;")
-        self.titleBar.layout().insertWidget(1, self.title_clock)
+        self.title_clock.setStyleSheet("color: rgba(255, 255, 255, 0.5); font-size: 14px; margin-left: 15px;")
+        
+        self.titleBar.layout().insertWidget(1, self.session_clock)
+        self.titleBar.layout().insertWidget(2, self.title_clock)
         
         self.clock_timer = QTimer(self)
         self.clock_timer.timeout.connect(self.update_title_clock)
         self.clock_timer.start(30000) # Update every 30s
+
+        # Session Timer
+        self.session_remaining_seconds = 0
+        self.session_timer = QTimer(self)
+        self.session_timer.timeout.connect(self.update_session_countdown)
         
         # Connect signals
         self.homeInterface.backgroundChanged.connect(self.setBackgroundImage)
@@ -74,6 +90,7 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.vaultInterface, FIF.FOLDER, 'My Vault', NavigationItemPosition.TOP)
         self.addSubInterface(self.searchInterface, FIF.SEARCH, 'Deep Search', NavigationItemPosition.TOP)
         self.addSubInterface(self.calendarInterface, FIF.CALENDAR, 'Study Calendar', NavigationItemPosition.TOP)
+        self.addSubInterface(self.sessionInterface, FIF.HISTORY, 'Session', NavigationItemPosition.TOP)
         self.addSubInterface(self.musicInterface, FIF.MUSIC, 'Music Hub', NavigationItemPosition.TOP)
         self.addSubInterface(self.radioInterface, FIF.WIFI, 'Internet Radio', NavigationItemPosition.TOP)
         self.addSubInterface(self.noteiInterface, FIF.LAYOUT, 'Mboard', NavigationItemPosition.TOP)
@@ -156,3 +173,41 @@ class MainWindow(FluentWindow):
 
     def update_title_clock(self):
         self.title_clock.setText(QTime.currentTime().toString("HH:mm"))
+
+    def start_session_timer(self, minutes, intent):
+        self.current_session_intent = intent
+        self.current_session_duration = minutes
+        self.session_remaining_seconds = minutes * 60
+        self.update_session_display()
+        self.session_timer.start(1000)
+        self.session_clock.setStyleSheet("color: #00ff00; font-size: 14px; margin-left: 20px; font-weight: bold;")
+
+    def cancel_session_timer(self):
+        self.session_timer.stop()
+        self.session_remaining_seconds = 0
+        self.session_clock.setText("00:00")
+        self.session_clock.setStyleSheet("color: rgba(255, 255, 255, 0.3); font-size: 14px; margin-left: 20px; font-weight: bold;")
+        
+        if getattr(self, 'current_session_intent', None):
+            insert_session(self.current_session_intent, self.current_session_duration, 'cancelled')
+            self.sessionInterface.load_history()
+            self.current_session_intent = None
+
+    def update_session_countdown(self):
+        if self.session_remaining_seconds > 0:
+            self.session_remaining_seconds -= 1
+            self.update_session_display()
+        else:
+            self.session_timer.stop()
+            self.session_clock.setText("00:00")
+            self.session_clock.setStyleSheet("color: #ff0000; font-size: 14px; margin-left: 20px; font-weight: bold;")
+            
+            if getattr(self, 'current_session_intent', None):
+                insert_session(self.current_session_intent, self.current_session_duration, 'finished')
+                self.sessionInterface.load_history()
+                self.current_session_intent = None
+
+    def update_session_display(self):
+        mins = self.session_remaining_seconds // 60
+        secs = self.session_remaining_seconds % 60
+        self.session_clock.setText(f"{mins:02d}:{secs:02d}")

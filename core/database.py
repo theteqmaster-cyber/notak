@@ -48,6 +48,17 @@ def initialize_db():
         )
     """)
     
+    # Sessions table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            intent TEXT NOT NULL,
+            duration_minutes INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # High scores table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS high_scores (
@@ -281,3 +292,28 @@ def get_high_score(game_id):
         return row['score'] if row else 0
     finally:
         conn.close()
+
+def insert_session(intent: str, duration_minutes: int, status: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO sessions (intent, duration_minutes, status)
+        VALUES (?, ?, ?)
+    """, (intent, duration_minutes, status))
+    conn.commit()
+    conn.close()
+
+def get_session_history(days: int = None):
+    conn = get_connection()
+    cursor = conn.cursor()
+    if days:
+        cursor.execute("""
+            SELECT * FROM sessions 
+            WHERE created_at >= datetime('now', ?) 
+            ORDER BY created_at DESC
+        """, (f"-{days} days",))
+    else:
+        cursor.execute("SELECT * FROM sessions ORDER BY created_at DESC")
+    results = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return results
