@@ -2,8 +2,9 @@ import os
 import re
 import datetime
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel, QHBoxLayout, QFrame
-from PySide6.QtGui import QTextCursor, QTextListFormat, QTextCharFormat, QFont
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtGui import QTextCursor, QTextListFormat, QTextCharFormat, QFont, QTextDocument, QPainter
+from PySide6.QtCore import QTimer, Qt, Signal, QRectF
+from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 
 from qfluentwidgets import TransparentPushButton, FluentIcon as FIF, InfoBar, InfoBarPosition
 
@@ -79,6 +80,10 @@ class ZenWriter(QWidget):
         self.btn_bullets.setToolTip("Bullet List")
         self.btn_bullets.clicked.connect(self.toggle_bullets)
         
+        self.btn_print = TransparentPushButton(FIF.PRINT, "Print")
+        self.btn_print.setToolTip("Print or Export to PDF")
+        self.btn_print.clicked.connect(self.export_to_pdf)
+        
         self.btn_fmrt = TransparentPushButton(FIF.EDIT, "fmrt")
         self.btn_fmrt.setToolTip("AI Format Highlighted Text")
         self.btn_fmrt.setStyleSheet("color: #a371f7; font-weight: bold;")
@@ -90,6 +95,7 @@ class ZenWriter(QWidget):
         self.toolbar_layout.addWidget(self.btn_h1)
         self.toolbar_layout.addWidget(self.btn_h2)
         self.toolbar_layout.addWidget(self.btn_bullets)
+        self.toolbar_layout.addWidget(self.btn_print)
         self.toolbar_layout.addStretch()
         self.toolbar_layout.addWidget(self.btn_fmrt)
         
@@ -313,3 +319,105 @@ class ZenWriter(QWidget):
             self.status_label.setStyleSheet("color: #0088ff; background: rgba(0, 136, 255, 0.1); padding: 4px 12px; border-radius: 10px;")
             self.saveCompleted.emit({'title': first_line, 'content': markdown_text})
         except: self.status_label.setText("SAVE ERROR")
+
+    def export_to_pdf(self):
+        title = "Untitled Note"
+        if self.is_cloud and self.cloud_data:
+            title = self.cloud_data.get('title', title)
+        elif self.current_file_path:
+            title = os.path.basename(self.current_file_path).split('_')[0]
+
+        safe_title = re.sub(r'[^a-zA-Z0-9_\-\s]', '', title).strip()
+        default_path = os.path.join(os.path.expanduser("~"), "Downloads", f"{safe_title}.pdf")
+
+        from PySide6.QtWidgets import QFileDialog
+        save_path, _ = QFileDialog.getSaveFileName(self, "Export PDF", default_path, "PDF Files (*.pdf)")
+        
+        if not save_path:
+            return
+
+        printer = QPrinter()
+        printer.setOutputFormat(QPrinter.PdfFormat)
+        printer.setOutputFileName(save_path)
+        printer.setResolution(96)
+        
+        doc = QTextDocument()
+
+        date_str = datetime.datetime.now().strftime("%d %B %Y")
+        course = self.course_name
+        icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "icon.png"))
+        
+        html = f"""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="{icon_path}" width="80" height="80" />
+            <h1 style="color: #2c3e50; font-family: sans-serif; margin: 0;">Notak</h1>
+        </div>
+        <hr style="border: 1px solid #ddd;">
+        <table width="100%" style="margin-bottom: 20px; font-family: sans-serif; color: #555;">
+            <tr>
+                <td><b>Title:</b> {title}</td>
+                <td style="text-align: right;"><b>Date:</b> {date_str}</td>
+            </tr>
+            <tr>
+                <td><b>Course:</b> {course}</td>
+                <td></td>
+            </tr>
+        </table>
+        <hr style="border: 1px solid #ddd; margin-bottom: 30px;">
+        """
+        
+        # The editor uses a dark theme, so exported HTML may have light/faint text or inherit light colors.
+        # We enforce a sharp, dark color for the PDF by setting a default stylesheet on the document.
+        doc.setDefaultStyleSheet("body, p, li, span, h1, h2, h3, h4, h5, h6 { color: #000000; }")
+        
+        editor_html = self.editor.toHtml()
+        # Also strip any existing inline white/light colors just in case
+        editor_html = re.sub(r'color:\s*#[d-fD-F][0-9a-fA-F]{2,5};?', 'color: #000000;', editor_html)
+        html += editor_html
+        
+        doc.setHtml(html)
+        
+        page_rect = printer.pageRect(QPrinter.DevicePixel)
+        footer_height = 50 
+        doc_size = QRectF(0, 0, page_rect.width(), page_rect.height() - footer_height).size()
+        doc.setPageSize(doc_size)
+        
+        painter = QPainter(printer)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        page_count = doc.pageCount()
+        for i in range(page_count):
+            if i > 0:
+                printer.newPage()
+            
+            painter.save()
+            
+            y_offset = i * doc_size.height()
+            painter.translate(0, -y_offset)
+            
+            clip_rect = QRectF(0, y_offset, doc_size.width(), doc_size.height())
+            doc.drawContents(painter, clip_rect)
+            painter.restore()
+            
+            painter.save()
+            footer_text = f"Page {i+1} of {page_count} - This document was generated using Notak Copyright 2026"
+            font = painter.font()
+            font.setPointSize(10)
+            painter.setFont(font)
+            painter.setPen(Qt.gray)
+            
+            footer_rect = QRectF(0, page_rect.height() - footer_height, page_rect.width(), footer_height)
+            painter.drawText(footer_rect, Qt.AlignBottom | Qt.AlignCenter, footer_text)
+            painter.restore()
+            
+        painter.end()
+        
+        InfoBar.success(
+            title="Export Successful",
+            content=f"Document saved to {save_path}",
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=3000,
+            parent=self
+        )

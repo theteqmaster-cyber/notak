@@ -128,9 +128,10 @@ class SupabaseService:
     def get_calendar_events(self):
         """Fetch today's calendar events from Supabase."""
         try:
-            today = datetime.datetime.now().strftime("%Y-%m-%d")
-            # Using the cloud calendar_events table
-            response = self.client.table("calendar_events").select("*").eq("event_date", today).execute()
+            today_start = datetime.datetime.now().strftime("%Y-%m-%dT00:00:00")
+            today_end = datetime.datetime.now().strftime("%Y-%m-%dT23:59:59")
+            # Using the cloud calendar_events table with start_time range filter
+            response = self.client.table("calendar_events").select("*").gte("start_time", today_start).lte("start_time", today_end).execute()
             return response.data
         except Exception as e:
             print(f"Error fetching calendar events: {e}")
