@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QL
 
 from qfluentwidgets import (ScrollArea, TitleLabel, PrimaryPushButton,
                             SubtitleLabel, IconWidget, FluentIcon as FIF,
-                            BodyLabel, CardWidget)
+                            BodyLabel, CardWidget, RoundMenu, Action)
 
 from core.database import get_connection
 from core.importer import split_filename_for_display
@@ -136,9 +136,9 @@ class NoteiInterface(QWidget):
             """)
             
             # Use local lambda or a proper method for signals
+            # Handle clicks
             card_path = b['path']
-            # Using mousePressEvent for more immediate response
-            card.mousePressEvent = lambda e, p=card_path: self.open_board(p) if e.button() == Qt.LeftButton else None
+            card.mousePressEvent = lambda e, p=card_path: self.on_card_click(e, p)
             
             c_layout = QVBoxLayout(card)
             c_layout.setContentsMargins(10, 10, 10, 10)
@@ -182,3 +182,42 @@ class NoteiInterface(QWidget):
             if col >= max_cols:
                 col = 0
                 row += 1
+
+    def on_card_click(self, event, path):
+        if event.button() == Qt.LeftButton:
+            self.open_board(path)
+        elif event.button() == Qt.RightButton:
+            self.show_card_menu(event.globalPos(), path)
+
+    def show_card_menu(self, pos, path):
+        menu = RoundMenu(parent=self)
+        delete_action = Action(FIF.DELETE, "Move to Recycle Bin", self)
+        delete_action.triggered.connect(lambda: self.delete_board(path))
+        menu.addAction(delete_action)
+        menu.exec(pos)
+
+    def delete_board(self, path):
+        # Move to .recycle folder
+        vault_path = os.path.dirname(os.path.dirname(path))
+        recycle_dir = os.path.join(vault_path, ".recycle")
+        if not os.path.exists(recycle_dir):
+            os.makedirs(recycle_dir)
+        
+        filename = os.path.basename(path)
+        dest = os.path.join(recycle_dir, filename)
+        
+        # Move .mboard and .png (thumbnail)
+        try:
+            if os.path.exists(path):
+                os.rename(path, dest)
+            
+            thumb = path.replace(".mboard", ".png")
+            if os.path.exists(thumb):
+                os.rename(thumb, os.path.join(recycle_dir, os.path.basename(thumb)))
+                
+            from qfluentwidgets import InfoBar
+            InfoBar.success("Board Moved", f"{filename} moved to Recycle Bin.", parent=self)
+            self.refresh_gallery()
+        except Exception as e:
+            from qfluentwidgets import InfoBar
+            InfoBar.error("Error", f"Could not delete board: {e}", parent=self)

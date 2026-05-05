@@ -39,6 +39,9 @@ def main():
     splash.setProgress(90)
     app.processEvents()
     
+    splash.setStatus("Preloading Components for Speed...")
+    window.preload()
+    
     splash.setStatus("Ready to Study.")
     splash.setProgress(100)
     app.processEvents()

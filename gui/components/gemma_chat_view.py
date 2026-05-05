@@ -37,7 +37,7 @@ class MessageBubble(QFrame):
         self.browser.setHtml(text)
         
         self.layout.addWidget(self.browser)
-        self.setFixedWidth(380)
+        self.setMaximumWidth(420)
         
         if is_error:
             self.setStyleSheet("""
@@ -93,7 +93,9 @@ class GemmaChatView(QWidget):
         self.history = []
         
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint | Qt.Window | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.Window)
+        self.setWindowTitle("Gemma AI Apostle")
+        self.resize(500, 750)
         
         self.polling_timer = QTimer(self)
         self.polling_timer.timeout.connect(self._sync_chat_buffer)
@@ -162,11 +164,7 @@ class GemmaChatView(QWidget):
         self.btn_stop.hide()
         header_layout.addWidget(self.btn_stop)
         
-        self.btn_close = TransparentPushButton(FIF.CLOSE, "")
-        self.btn_close.setFixedSize(36, 36)
-        self.btn_close.setStyleSheet("color: rgba(255,255,255,0.4); border-radius: 18px;")
-        self.btn_close.clicked.connect(self.closed.emit)
-        header_layout.addWidget(self.btn_close)
+        header_layout.addSpacing(10)
         self.layout.addLayout(header_layout)
         
         self.scroll_area = ScrollArea()
@@ -212,15 +210,6 @@ class GemmaChatView(QWidget):
                 return True
         return super().eventFilter(obj, event)
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            event.accept()
-
-    def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_pos)
-            event.accept()
 
     def add_message(self, text, is_user=True, is_error=False):
         bubble = MessageBubble(text, is_user, is_error)

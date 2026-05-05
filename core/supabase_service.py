@@ -1,11 +1,13 @@
 import os
 import json
 import datetime
+from dotenv import load_dotenv
 from supabase import create_client, Client
 
-# Credentials
-SUPABASE_URL = "https://whskueoycrhiicvawimo.supabase.co"
-SUPABASE_KEY = "sb_publishable_jgWVccQ9fKCtfFZ6r4r8lw_SM7wdRXN"
+# Security: Load credentials from environment
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 SESSION_PATH = os.path.expanduser("~/.notak/session.json")
 
 class SupabaseService:

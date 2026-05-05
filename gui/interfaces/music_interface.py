@@ -40,7 +40,8 @@ class SongItemWidget(QWidget):
         self.title_lbl.setFixedWidth(200)
         self.title_lbl.setStyleSheet("font-weight: bold; font-size: 14px; color: #eee; background: transparent;")
         
-        self.artist_lbl = CaptionLabel("Unknown Artist")
+        self.artist_lbl = MarqueeLabel("Unknown Artist")
+        self.artist_lbl.setFixedWidth(200)
         self.artist_lbl.setStyleSheet("color: #aaa; font-size: 12px;")
         info.addWidget(self.title_lbl)
         info.addWidget(self.artist_lbl)
@@ -165,11 +166,11 @@ class MusicInterface(QWidget):
         
         # MARQUEE for Playback bar
         self.track_name_label = MarqueeLabel("No Track Selected")
-        self.track_name_label.setFixedWidth(180)
+        self.track_name_label.setFixedWidth(220)
         self.track_name_label.setStyleSheet("font-size: 15px; font-weight: bold; color: white; background: transparent;")
         
         self.artist_label = MarqueeLabel("Unknown Artist")
-        self.artist_label.setFixedWidth(180)
+        self.artist_label.setFixedWidth(220)
         self.artist_label.setStyleSheet("color: #aaa; font-size: 12px; background: transparent;")
         
         track_info_v.addWidget(self.track_name_label)

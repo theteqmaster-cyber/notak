@@ -76,7 +76,6 @@ class MainWindow(FluentWindow):
         
         # Connect signals
         self.homeInterface.backgroundChanged.connect(self.setBackgroundImage)
-        self.homeInterface.searchRequested.connect(self.handle_search_request)
 
         # Wire up navigation
         self.initNavigation()
@@ -105,7 +104,10 @@ class MainWindow(FluentWindow):
         
         # Adjust aesthetics
         self.navigationInterface.setAcrylicEnabled(False)
-        self.navigationInterface.setExpandWidth(220)
+        self.navigationInterface.setExpandWidth(48)
+        self.navigationInterface.setCollapsible(False)
+        self.navigationInterface.setMenuButtonVisible(False)
+
 
     def initWindow(self):
         self.resize(1100, 800)
@@ -211,3 +213,26 @@ class MainWindow(FluentWindow):
         mins = self.session_remaining_seconds // 60
         secs = self.session_remaining_seconds % 60
         self.session_clock.setText(f"{mins:02d}:{secs:02d}")
+
+    def preload(self):
+        """Pre-load data for all major interfaces to ensure lightning-fast switching."""
+        try:
+            # Vault
+            self.vaultInterface.reload_current_course()
+            
+            # Music
+            self.musicInterface.load_playlist()
+            
+            # Calendar
+            self.calendarInterface.update_event_list()
+            
+            # Session
+            self.sessionInterface.load_history()
+            
+            # Radio
+            self.radioInterface.load_playlist()
+            
+            # HydraSpace
+            self.hydraInterface.load_initial_data()
+        except Exception as e:
+            print(f"Preloading notice: {e}")

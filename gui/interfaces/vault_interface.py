@@ -395,6 +395,35 @@ class VaultFileCard(CardWidget):
             except Exception as e:
                 print(f"Error opening folder: {e}")
 
+class ClickableCardWidget(CardWidget):
+    clicked = Signal()
+    deleted = Signal()
+    
+    def __init__(self, path, parent=None):
+        super().__init__(parent)
+        self.path = path
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet("CardWidget{background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px;}")
+        
+    def mouseReleaseEvent(self, e):
+        super().mouseReleaseEvent(e)
+        if e.button() == Qt.LeftButton:
+            self.clicked.emit()
+            
+    def contextMenuEvent(self, e):
+        from qfluentwidgets import RoundMenu, Action, MenuAnimationType
+        from core.database import restore_file_by_path
+        menu = RoundMenu(parent=self)
+        restore_action = Action(FIF.SYNC, "Restore", self)
+        restore_action.triggered.connect(self.restore_item)
+        menu.addAction(restore_action)
+        menu.exec(e.globalPos(), aniType=MenuAnimationType.DROP_DOWN)
+        
+    def restore_item(self):
+        from core.database import restore_file_by_path
+        restore_file_by_path(self.path)
+        self.deleted.emit()
+
 class VaultInterface(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -402,6 +431,7 @@ class VaultInterface(QWidget):
         self.setStyleSheet("background: transparent;")
         self.setAcceptDrops(True)
         self._is_updating = False
+        self._preloaded = False
         
         self.main_layout = QHBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
@@ -674,6 +704,7 @@ class VaultInterface(QWidget):
         cid = self.current_course()
         self.current_files = get_files_for_course(cid)
         self.filter_files()
+        self._preloaded = True
 
     def display_file(self, file_data):
         self.selected_file_data = file_data
@@ -791,7 +822,9 @@ class VaultInterface(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self.reload_current_course()
+        if not self._preloaded:
+            self.reload_current_course()
+        self._preloaded = False # Reset so subsequent shows (if needed) refresh
 
     def import_files_dialog(self):
         file_paths, _ = QFileDialog.getOpenFileNames(self, "Select Files to Import", "", "All Files (*)")
