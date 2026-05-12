@@ -19,3 +19,7 @@ httpx
 google-genai
 python-dotenv
 groq
+flask
+flask-socketio
+flask-cors
+qrcode[pil]

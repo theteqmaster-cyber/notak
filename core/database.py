@@ -263,6 +263,20 @@ def get_events_for_date(date: str):
     conn.close()
     return results
 
+def get_upcoming_events(limit: int = 10):
+    """Retrieve upcoming events from today onwards."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM calendar_events 
+        WHERE event_date >= date('now') 
+        ORDER BY event_date ASC, id ASC 
+        LIMIT ?
+    """, (limit,))
+    results = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return results
+
 def update_high_score(game_id, score):
     conn = get_connection()
     try:

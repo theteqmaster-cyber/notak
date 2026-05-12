@@ -1,5 +1,7 @@
 import os
 import uuid
+import json
+import datetime
 from PySide6.QtCore import Qt, QPointF, QRectF, Signal, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QPainter, QBrush, QColor, QPen, QPainterPath, QUndoStack, QUndoCommand
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QGraphicsView, QGraphicsScene, 
@@ -10,6 +12,8 @@ from qfluentwidgets import (TransparentToolButton, FluentIcon as FIF, PrimaryPus
                             CaptionLabel, LineEdit, ToolButton)
 from core.canvas_engine import MboardData, CanvasManager
 from gui.components.connector_item import StickyArrowItem
+from gui.components.correction_window import CorrectionWindow
+from core.groq_service import GroqService
 
 class DrawingPathItem(QGraphicsPathItem):
     def __init__(self, path=None, pen_color=QColor(255, 255, 255), pen_width=2, is_highlighter=False):
@@ -262,6 +266,7 @@ class MboardTool:
     RECT = "rect"
     CIRCLE = "circle"
     ARROW = "arrow"
+    CORRECT = "correct"
 
 class MboardScene(QGraphicsScene):
     def __init__(self, parent=None):
@@ -475,6 +480,12 @@ class MboardEditor(QWidget):
             self.data = MboardData("New Board")
             
         self.undo_stack = QUndoStack(self)
+        self.correction_window = CorrectionWindow()
+        self.correction_window.correctionRequested.connect(self.process_correction)
+        self.correction_window.tryAgainRequested.connect(lambda: self.process_correction(self.correction_window.notes_input.text()))
+        self.correction_window.cancelled.connect(self.cleanup_correction)
+        
+        self.selection_box = None
         self.initUI()
         self.load_elements_into_scene()
         self.setObjectName("MboardEditor")
@@ -568,6 +579,8 @@ class MboardEditor(QWidget):
         self.btn_rect = self.add_tool(FIF.LAYOUT, "Rectangle", lambda: self.add_shape_item("rect"))
         self.btn_circle = self.add_tool(FIF.GLOBE, "Circle", lambda: self.add_shape_item("circle"))
         self.btn_arrow = self.add_tool(FIF.SEND_FILL, "Arrow", self.set_arrow_mode)
+        self.btn_correct = self.add_tool(FIF.COMPLETED, "Correct Diagram", self.set_correct_mode)
+        self.btn_correct.setStyleSheet("color: #00ffaa;")
         
         toolbar_layout.addStretch()
         
@@ -618,6 +631,26 @@ class MboardEditor(QWidget):
     def set_arrow_mode(self):
         self.scene.current_tool = MboardTool.ARROW
         self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
+
+    def set_correct_mode(self):
+        from gui.components.selection_area_item import SelectionAreaItem
+        self.scene.current_tool = MboardTool.CORRECT
+        self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
+        
+        # Cleanup any old box
+        self.cleanup_correction()
+        
+        # Insert new selection box in the center of the view
+        view_center = self.view.viewport().rect().center()
+        scene_pos = self.view.mapToScene(view_center)
+        self.selection_box = SelectionAreaItem(scene_pos.x() - 100, scene_pos.y() - 100, 200, 200)
+        self.scene.addItem(self.selection_box)
+        self.scene.clearSelection()
+        self.selection_box.setSelected(True)
+        
+        # Open standalone window
+        from PySide6.QtGui import QGuiApplication
+        self.correction_window.show_centered(QGuiApplication.primaryScreen().availableGeometry())
 
     def toggle_bookmarks(self):
         if self.bookmarks_panel.isVisible():
@@ -723,7 +756,10 @@ class MboardEditor(QWidget):
         
         # Update elements list from scene
         self.data.elements = []
+        from gui.components.selection_area_item import SelectionAreaItem
         for item in self.scene.items():
+            if isinstance(item, SelectionAreaItem):
+                continue
             if isinstance(item, QGraphicsTextItem):
                 self.data.elements.append({
                     "id": getattr(item, "id", None),
@@ -952,7 +988,173 @@ class MboardEditor(QWidget):
         else:
             super().keyPressEvent(event)
 
+    def on_region_selected(self, rect):
+        pass # No longer using rubber-band notify
+
+    def cleanup_correction(self):
+        if self.selection_box and self.selection_box.scene():
+            self.scene.removeItem(self.selection_box)
+            self.selection_box = None
+
+    def process_correction(self, user_notes):
+        from gui.components.selection_area_item import SelectionAreaItem
+        if not self.selection_box: 
+            self.set_correct_mode()
+            return
+        
+        # Get region from the box
+        region_rect = self.selection_box.sceneBoundingRect()
+        
+        # 1. Collect strokes in the region
+        items = self.scene.items(region_rect)
+        strokes = []
+        original_items = []
+        
+        for item in items:
+            if item == self.selection_box: continue
+            if isinstance(item, DrawingPathItem) and not item.opacity() < 1.0:
+                points = []
+                path = item.path()
+                # Sample points to reduce JSON size
+                count = path.elementCount()
+                step = max(1, count // 20)
+                for i in range(0, count, step):
+                    el = path.elementAt(i)
+                    points.append([round(el.x, 1), round(el.y, 1)])
+                if count > 1:
+                    last = path.elementAt(count - 1)
+                    points.append([round(last.x, 1), round(last.y, 1)])
+                
+                # Add bounding box to help AI with scale and alignment
+                bbox = item.sceneBoundingRect()
+                strokes.append({
+                    "points": points,
+                    "bbox": [round(bbox.x(), 1), round(bbox.y(), 1), round(bbox.width(), 1), round(bbox.height(), 1)]
+                })
+                original_items.append(item)
+        
+        self.pending_correction_items = original_items
+        
+        if not strokes:
+            from qfluentwidgets import InfoBar, InfoBarPosition
+            InfoBar.warning("No Strokes Found", "Select a region with hand-drawn lines to correct.", parent=self)
+            return
+
+        # 2. Prepare Prompt for Ingracia
+        strokes_json = json.dumps(strokes)
+        prompt = f"""
+        You are Ingracia, a celestial geometry master. I have hand-drawn some strokes in a diagramming tool. 
+        Please interpret these strokes and return a list of perfected geometric shapes.
+        
+        USER NOTES: "{user_notes}"
+        
+        HAND-DRAWN STROKES (Coordinates):
+        {strokes_json}
+        
+        RULES:
+        1. TYPE DETECTION: Identify 'rect', 'circle', 'line', 'arrow', or 'text'.
+        2. GEOMETRIC PERFECTION: All lines MUST be perfectly horizontal or vertical if they are within 10 degrees of being so.
+        3. GRID SNAPPING: All coordinates (x, y, w, h) should be snapped to a 10px grid for a clean look.
+        4. ALIGNMENT: If multiple shapes/lines form a table or flowchart, ensure they share exact X or Y coordinates (e.g., table cells should align perfectly).
+        5. TEXT PLACEMENT: If text is inside or near a box, center it perfectly within that box.
+        6. OUTPUT: Return ONLY a valid JSON array of objects. No conversational text.
+        7. OBJECT FORMAT:
+           - 'type': 'rect', 'circle', 'line', 'arrow', or 'text'
+           - 'x', 'y', 'w', 'h' (for all types)
+           - 'content': 'text' (only for 'text' type)
+           - 'points': [[x1,y1], [x2,y2]] (ONLY for line/arrow, precisely 2 points)
+           - 'color': '#ffffff'
+        """
+        
+        system_prompt = "You are a geometry and OCR correction engine. Output only valid JSON."
+        
+        self.correction_window.set_status("● INGRACIA IS THINKING...", "#ffd700")
+        
+        # Avoid thread issues by cleanup and connecting directly to slot
+        if hasattr(self, 'ai_thread') and self.ai_thread and self.ai_thread.isRunning():
+            self.ai_thread.quit()
+            self.ai_thread.wait()
+
+        self.ai_thread, self.ai_worker = GroqService().get_chat_thread(prompt, system_prompt)
+        self.ai_worker.finished.connect(self.apply_correction)
+        self.ai_thread.start()
+
+    def apply_correction(self, response_text):
+        original_items = getattr(self, 'pending_correction_items', [])
+        try:
+            # Clean response text if AI added markdown backticks
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+                
+            shapes = json.loads(response_text)
+            
+            # Start Undo Macro
+            self.undo_stack.beginMacro("Straighten Diagram")
+            
+            # Delete originals
+            self.undo_stack.push(DeleteItemsCommand(self.scene, original_items))
+            
+            # Add new shapes
+            for s in shapes:
+                stype = s.get('type')
+                color = QColor(s.get('color', '#ffffff'))
+                
+                if stype == 'rect':
+                    item = ResizableRectItem(s['x'], s['y'], s['w'], s['h'])
+                    item.setPen(QPen(color, 2))
+                    item.setBrush(QBrush(QColor(0, 210, 255, 100))) # Default theme color
+                    self.undo_stack.push(AddItemCommand(self.scene, item))
+                elif stype == 'circle':
+                    item = ResizableEllipseItem(s['x'], s['y'], s['w'], s['h'])
+                    item.setPen(QPen(color, 2))
+                    item.setBrush(QBrush(QColor(255, 100, 100, 100)))
+                    self.undo_stack.push(AddItemCommand(self.scene, item))
+                elif stype in ('line', 'arrow'):
+                    pts = s.get('points', [])
+                    if len(pts) >= 2:
+                        x1, y1 = pts[0]
+                        x2, y2 = pts[1]
+                        # Final programmatic snapping for perfection
+                        if abs(x1 - x2) < 15: x2 = x1 # Snap to vertical
+                        if abs(y1 - y2) < 15: y2 = y1 # Snap to horizontal
+                        
+                        path = QPainterPath()
+                        path.moveTo(x1, y1)
+                        path.lineTo(x2, y2)
+                        item = DrawingPathItem(path, color, 2)
+                        self.undo_stack.push(AddItemCommand(self.scene, item))
+                elif stype == 'text':
+                    content = s.get('content', 'Text')
+                    item = EditableTextItem(content)
+                    # Center text if w/h provided
+                    tx = s.get('x', 0)
+                    ty = s.get('y', 0)
+                    item.setPos(tx, ty)
+                    item.setDefaultTextColor(color)
+                    self.undo_stack.push(AddItemCommand(self.scene, item))
+            
+            self.undo_stack.endMacro()
+            
+            # Cleanup box on success
+            self.cleanup_correction()
+            self.correction_window.set_status("● THINKING DONE. MANIFESTED.", "#00ffaa")
+            QTimer.singleShot(1500, self.correction_window.close)
+            
+            from qfluentwidgets import InfoBar, InfoBarPosition
+            InfoBar.success("Diagram Perfected", "Ingracia has straightened your work.", parent=self)
+            
+        except Exception as e:
+            self.correction_window.set_status("● ERROR: CONSULTATION FAILED", "#ff4444")
+            from qfluentwidgets import InfoBar
+            InfoBar.error("Correction Failed", f"Ingracia was confused: {str(e)}", parent=self)
+            print(f"Correction Error: {e}\nResponse: {response_text}")
+
     def close_editor(self):
+        if hasattr(self, 'ai_thread') and self.ai_thread and self.ai_thread.isRunning():
+            self.ai_thread.quit()
+            self.ai_thread.wait()
         self.save_board()
         self.closed.emit()
         self.hide()
