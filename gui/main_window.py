@@ -9,7 +9,9 @@ from qfluentwidgets import (NavigationItemPosition, setTheme, Theme, FluentWindo
                             SubtitleLabel, setFont, SplashScreen)
 from qfluentwidgets import FluentIcon as FIF
 
-from gui.interfaces.home_interface import HomeInterface
+from gui.interfaces.dashboard_interface import DashboardInterface
+from gui.interfaces.quick_note_interface import QuickNoteInterface
+from gui.interfaces.focus_interface import FocusInterface
 from gui.interfaces.vault_interface import VaultInterface
 from gui.interfaces.calendar_interface import CalendarInterface
 from gui.interfaces.music_interface import MusicInterface
@@ -38,7 +40,9 @@ class MainWindow(FluentWindow):
         self._current_bg_path = None
 
         # instantiate sub interfaces
-        self.homeInterface = HomeInterface(self)
+        self.dashboardInterface = DashboardInterface(self)
+        self.quickNoteInterface = QuickNoteInterface(self)
+        self.focusInterface = FocusInterface(self)
         self.vaultInterface = VaultInterface(self)
         self.calendarInterface = CalendarInterface(self)
         self.musicInterface = MusicInterface(self)
@@ -77,7 +81,8 @@ class MainWindow(FluentWindow):
         self.session_timer.timeout.connect(self.update_session_countdown)
         
         # Connect signals
-        self.homeInterface.backgroundChanged.connect(self.setBackgroundImage)
+        self.dashboardInterface.backgroundChanged.connect(self.setBackgroundImage)
+        self.quickNoteInterface.backgroundChanged.connect(self.setBackgroundImage)
 
         # Wire up navigation
         self.initNavigation()
@@ -87,7 +92,9 @@ class MainWindow(FluentWindow):
 
     def initNavigation(self):
         # add navigation items to sidebar
-        self.addSubInterface(self.homeInterface, FIF.HOME, 'Dashboard', NavigationItemPosition.TOP)
+        self.addSubInterface(self.dashboardInterface, FIF.HOME, 'Dashboard', NavigationItemPosition.TOP)
+        self.addSubInterface(self.quickNoteInterface, FIF.QUICK_NOTE, 'Quick Note', NavigationItemPosition.TOP)
+        self.addSubInterface(self.focusInterface, FIF.VIEW, 'Focus Mode', NavigationItemPosition.TOP)
         self.addSubInterface(self.vaultInterface, FIF.FOLDER, 'My Vault', NavigationItemPosition.TOP)
         self.addSubInterface(self.searchInterface, FIF.SEARCH, 'Deep Search', NavigationItemPosition.TOP)
         self.addSubInterface(self.calendarInterface, FIF.CALENDAR, 'Study Calendar', NavigationItemPosition.TOP)
@@ -113,7 +120,8 @@ class MainWindow(FluentWindow):
 
 
     def initWindow(self):
-        self.resize(1100, 800)
+        self.resize(880, 540)
+        self.setMinimumSize(QSize(700, 450))
         self.setWindowTitle('Notak - Study Hub')
         # Dark theme
         setTheme(Theme.DARK)

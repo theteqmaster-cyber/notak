@@ -9,12 +9,12 @@ from gui.components.session_graph import SessionGraphWidget
 from gui.zen_writer import ZenWriter
 from core.database import get_connection, get_session_history
 
-class HomeInterface(ScrollArea):
+class QuickNoteInterface(ScrollArea):
     backgroundChanged = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.setObjectName("HomeInterface")
+        self.setObjectName("QuickNoteInterface")
         self.view = QWidget(self)
         self.setWidget(self.view)
         self.setWidgetResizable(True)
@@ -22,8 +22,8 @@ class HomeInterface(ScrollArea):
         self.view.setStyleSheet("QWidget { background-color: transparent; }")
 
         self.main_h_layout = QHBoxLayout(self.view)
-        self.main_h_layout.setContentsMargins(30, 30, 30, 30)
-        self.main_h_layout.setSpacing(30)
+        self.main_h_layout.setContentsMargins(15, 15, 15, 15)
+        self.main_h_layout.setSpacing(15)
 
         # --- LEFT COLUMN: Academic Hub (Note Editor) ---
         self.left_col = QVBoxLayout()
@@ -101,7 +101,7 @@ class HomeInterface(ScrollArea):
 
         # 1. Music Widget
         self.music_card = CardWidget(self.view)
-        self.music_card.setFixedHeight(320)
+        self.music_card.setFixedHeight(280)
         self.music_card.setStyleSheet("CardWidget { background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 15px; }")
         music_layout = QVBoxLayout(self.music_card)
         music_layout.setContentsMargins(20, 20, 20, 20)
@@ -151,7 +151,7 @@ class HomeInterface(ScrollArea):
         short_h.setSpacing(15)
         
         self.btn_vault = CardWidget(self.shortcut_card)
-        self.btn_vault.setFixedSize(140, 90)
+        self.btn_vault.setFixedSize(110, 75)
         v_layout = QVBoxLayout(self.btn_vault)
         v_layout.addWidget(IconWidget(FIF.FOLDER), alignment=Qt.AlignCenter)
         v_layout.addWidget(CaptionLabel("Study Vault"), alignment=Qt.AlignCenter)
@@ -159,7 +159,7 @@ class HomeInterface(ScrollArea):
         self.btn_vault.mousePressEvent = lambda e: self.navigate_to('vaultInterface')
         
         self.btn_hydra = CardWidget(self.shortcut_card)
-        self.btn_hydra.setFixedSize(140, 90)
+        self.btn_hydra.setFixedSize(110, 75)
         h_layout = QVBoxLayout(self.btn_hydra)
         h_layout.addWidget(IconWidget(FIF.IOT), alignment=Qt.AlignCenter) 
         h_layout.addWidget(CaptionLabel("Hydra Space"), alignment=Qt.AlignCenter)

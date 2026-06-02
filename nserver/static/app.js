@@ -73,7 +73,7 @@ function navigate(page) {
 
   if (page === 'home')     loadHome();
   if (page === 'vault')    loadVault();
-  if (page === 'music')    loadMusic();
+  if (page === 'music')    { loadMusic(); setTimeout(() => { if (typeof OceanScene !== 'undefined') OceanScene.init(); }, 80); }
   if (page === 'radio')    loadRadio();
   if (page === 'calendar') loadCalendar();
   if (page === 'session')  loadSessionHistory();
@@ -214,6 +214,8 @@ let _vaultFiles = [];
 let _currentCourse = 'all';
 let _currentCat = 'all';
 let _currentFileId = null;
+let _vaultPage = 1;
+const VAULT_PAGE_SIZE = 8;
 
 async function loadVault() {
   try {
@@ -231,12 +233,14 @@ async function loadVault() {
 async function loadVaultFiles() {
   try {
     _vaultFiles = await api(`/api/vault/files?course=${_currentCourse}`);
+    _vaultPage = 1;
     filterFiles();
   } catch(e) { console.error(e); }
 }
 
 function selectCourse(course) {
   _currentCourse = course;
+  _vaultPage = 1;
   document.querySelectorAll('.course-item').forEach(el => {
     el.classList.toggle('active', el.textContent.trim().includes(course === 'all' ? 'All Library' : course));
   });
@@ -245,18 +249,29 @@ function selectCourse(course) {
 
 function setCat(cat) {
   _currentCat = cat;
+  _vaultPage = 1;
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === cat));
   filterFiles();
 }
 
-function filterFiles() {
+function filterFiles(resetPage = false) {
+  if (resetPage) _vaultPage = 1;
   const q = (document.getElementById('vault-search').value || '').toLowerCase();
   const filtered = _vaultFiles.filter(f =>
     (f.name || '').toLowerCase().includes(q) &&
     (_currentCat === 'all' || f.category === _currentCat)
   );
-  document.getElementById('file-list').innerHTML = filtered.length
-    ? filtered.map(f => `
+
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / VAULT_PAGE_SIZE) || 1;
+  if (_vaultPage > totalPages) _vaultPage = totalPages;
+  if (_vaultPage < 1) _vaultPage = 1;
+
+  const startIdx = (_vaultPage - 1) * VAULT_PAGE_SIZE;
+  const pageItems = filtered.slice(startIdx, startIdx + VAULT_PAGE_SIZE);
+
+  document.getElementById('file-list').innerHTML = pageItems.length
+    ? pageItems.map(f => `
         <div class="file-card ${f.id === _currentFileId ? 'active' : ''}" onclick="openFile(${f.id})">
           <div class="file-icon">${fileIcon(f.category)}</div>
           <div class="file-info">
@@ -265,6 +280,35 @@ function filterFiles() {
           </div>
         </div>`).join('')
     : `<div class="empty-state"><div>No files found</div></div>`;
+
+  renderVaultPagination(totalPages);
+}
+
+function renderVaultPagination(totalPages) {
+  const pagEl = document.getElementById('vault-pagination');
+  if (!pagEl) return;
+
+  if (totalPages <= 1) {
+    pagEl.innerHTML = '';
+    pagEl.style.display = 'none';
+    return;
+  }
+  pagEl.style.display = 'flex';
+
+  pagEl.innerHTML = `
+    <button class="btn btn-ghost btn-sm btn-icon pager-btn" onclick="changeVaultPage(${_vaultPage - 1})" ${_vaultPage === 1 ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <span class="pager-status">Page ${_vaultPage} of ${totalPages}</span>
+    <button class="btn btn-ghost btn-sm btn-icon pager-btn" onclick="changeVaultPage(${_vaultPage + 1})" ${_vaultPage === totalPages ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  `;
+}
+
+function changeVaultPage(p) {
+  _vaultPage = p;
+  filterFiles(false);
 }
 
 async function openFile(id) {
@@ -884,6 +928,9 @@ function renderSessionGraph(sessions) {
   }).join('');
 }
 
+let _sessionPage = 1;
+const SESSION_PAGE_SIZE = 10;
+
 function loadSessionHistory() {
   api('/api/sessions').then(sessions => {
     // Apply Timeframe Filter
@@ -905,7 +952,15 @@ function loadSessionHistory() {
     // 1. Render History List FIRST (Safety First)
     const historyList = document.getElementById('session-history');
     if (historyList) {
-      historyList.innerHTML = filtered.slice(0, 15).map(s => {
+      const totalItems = filtered.length;
+      const totalPages = Math.ceil(totalItems / SESSION_PAGE_SIZE) || 1;
+      if (_sessionPage > totalPages) _sessionPage = totalPages;
+      if (_sessionPage < 1) _sessionPage = 1;
+
+      const startIdx = (_sessionPage - 1) * SESSION_PAGE_SIZE;
+      const pageItems = filtered.slice(startIdx, startIdx + SESSION_PAGE_SIZE);
+
+      historyList.innerHTML = pageItems.map(s => {
         const statusColor = { finished:'#10b981', cancelled:'#f59e0b', running:'#7c3aed' }[s.status] || '#aaa';
         return `<div class="session-hist-item">
           <div style="width:8px;height:8px;border-radius:50%;background:${statusColor};flex-shrink:0;"></div>
@@ -916,6 +971,8 @@ function loadSessionHistory() {
           <span class="pill ${s.status==='finished'?'pill-green':s.status==='cancelled'?'pill-muted':'pill-purple'}">${s.status}</span>
         </div>`;
       }).join('') || '<div style="color:var(--text-muted);padding:24px;font-size:13px;text-align:center;">No sessions in this period.</div>';
+
+      renderSessionPagination(totalPages);
     }
 
     // 2. Sync Dashboard
@@ -936,6 +993,33 @@ function loadSessionHistory() {
   }).catch(err => {
     console.error("Failed to load sessions:", err);
   });
+}
+
+function renderSessionPagination(totalPages) {
+  const pagEl = document.getElementById('session-pagination');
+  if (!pagEl) return;
+
+  if (totalPages <= 1) {
+    pagEl.innerHTML = '';
+    pagEl.style.display = 'none';
+    return;
+  }
+  pagEl.style.display = 'flex';
+
+  pagEl.innerHTML = `
+    <button class="btn btn-ghost btn-sm btn-icon pager-btn" onclick="changeSessionPage(${_sessionPage - 1})" ${_sessionPage === 1 ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <span class="pager-status">Page ${_sessionPage} of ${totalPages}</span>
+    <button class="btn btn-ghost btn-sm btn-icon pager-btn" onclick="changeSessionPage(${_sessionPage + 1})" ${_sessionPage === totalPages ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  `;
+}
+
+function changeSessionPage(p) {
+  _sessionPage = p;
+  loadSessionHistory();
 }
 
 function startSession() {
@@ -1013,11 +1097,309 @@ function updateTimerDisplay() {
 let _playlist     = [];
 let _musicIdx     = -1;
 let _musicMode    = 'loop'; // loop | one | shuffle
+let _musicPage    = 1;
+const MUSIC_PAGE_SIZE = 10;
 const audioEl     = () => document.getElementById('audio-el');
+
+// ── Web Audio API Synthesizers & Visualizer State ──
+let _audioCtx = null;
+let _audioSource = null;
+let _analyzer = null;
+let _visualizerAnimId = null;
+
+let _rainNode = null;
+let _fireNode = null;
+let _humNode = null;
+let _humController = null;
+let _rainGain = null;
+let _fireGain = null;
+let _humGain = null;
+
+function initAudioContext() {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
+}
+
+function createBrownNoiseNode() {
+  const bufferSize = 2 * _audioCtx.sampleRate;
+  const noiseBuffer = _audioCtx.createBuffer(1, bufferSize, _audioCtx.sampleRate);
+  const output = noiseBuffer.getChannelData(0);
+  let lastOut = 0.0;
+  for (let i = 0; i < bufferSize; i++) {
+    const white = Math.random() * 2 - 1;
+    output[i] = (lastOut + (0.02 * white)) / 1.02;
+    lastOut = output[i];
+    output[i] *= 3.5;
+  }
+  const source = _audioCtx.createBufferSource();
+  source.buffer = noiseBuffer;
+  source.loop = true;
+  return source;
+}
+
+function generateCampfireBuffer() {
+  const sampleRate = _audioCtx.sampleRate;
+  const duration = 4.0;
+  const buffer = _audioCtx.createBuffer(1, sampleRate * duration, sampleRate);
+  const data = buffer.getChannelData(0);
+  
+  let lastOut = 0.0;
+  for (let i = 0; i < data.length; i++) {
+    const white = Math.random() * 2 - 1;
+    data[i] = (lastOut + (0.05 * white)) / 1.05;
+    lastOut = data[i];
+  }
+  
+  const numPops = Math.floor(duration * 12);
+  for (let p = 0; p < numPops; p++) {
+    const popTime = Math.random() * duration;
+    const popSampleIdx = Math.floor(popTime * sampleRate);
+    const amp = 0.4 + Math.random() * 0.6;
+    const decaySamples = 80 + Math.floor(Math.random() * 150);
+    for (let j = 0; j < decaySamples; j++) {
+      const idx = popSampleIdx + j;
+      if (idx < data.length) {
+        const t = j / decaySamples;
+        data[idx] += amp * Math.exp(-6 * t) * (Math.random() * 2 - 1);
+      }
+    }
+  }
+  
+  for (let i = 0; i < data.length; i++) {
+    data[i] *= 0.5;
+  }
+  return buffer;
+}
+
+function startCosmicHum() {
+  const osc1 = _audioCtx.createOscillator();
+  const osc2 = _audioCtx.createOscillator();
+  const filter = _audioCtx.createBiquadFilter();
+  const lfo = _audioCtx.createOscillator();
+  const lfoGain = _audioCtx.createGain();
+  
+  osc1.type = 'sawtooth';
+  osc1.frequency.value = 55;
+  
+  osc2.type = 'triangle';
+  osc2.frequency.value = 110.2;
+  
+  filter.type = 'lowpass';
+  filter.Q.value = 4;
+  filter.frequency.value = 150;
+  
+  lfo.type = 'sine';
+  lfo.frequency.value = 0.08;
+  
+  lfoGain.gain.value = 80;
+  
+  lfo.connect(lfoGain);
+  lfoGain.connect(filter.frequency);
+  
+  osc1.connect(filter);
+  osc2.connect(filter);
+  
+  osc1.start();
+  osc2.start();
+  lfo.start();
+  
+  return {
+    filter,
+    stop: () => {
+      try { osc1.stop(); } catch(e){}
+      try { osc2.stop(); } catch(e){}
+      try { lfo.stop(); } catch(e){}
+    }
+  };
+}
+
+function setAmbientVolume(type, val) {
+  initAudioContext();
+  if (!_audioCtx) return;
+  const volume = parseFloat(val) / 100;
+  
+  if (type === 'rain') {
+    if (!_rainGain) {
+      _rainGain = _audioCtx.createGain();
+      _rainGain.connect(_audioCtx.destination);
+    }
+    _rainGain.gain.setValueAtTime(volume, _audioCtx.currentTime);
+    
+    if (volume > 0 && !_rainNode) {
+      _rainNode = createBrownNoiseNode();
+      const filter = _audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 800;
+      
+      _rainNode.connect(filter);
+      filter.connect(_rainGain);
+      _rainNode.start();
+    } else if (volume === 0 && _rainNode) {
+      try { _rainNode.stop(); } catch(e) {}
+      _rainNode = null;
+    }
+  } else if (type === 'fire') {
+    if (!_fireGain) {
+      _fireGain = _audioCtx.createGain();
+      _fireGain.connect(_audioCtx.destination);
+    }
+    _fireGain.gain.setValueAtTime(volume * 1.5, _audioCtx.currentTime);
+    
+    if (volume > 0 && !_fireNode) {
+      const buffer = generateCampfireBuffer();
+      _fireNode = _audioCtx.createBufferSource();
+      _fireNode.buffer = buffer;
+      _fireNode.loop = true;
+      _fireNode.connect(_fireGain);
+      _fireNode.start();
+    } else if (volume === 0 && _fireNode) {
+      try { _fireNode.stop(); } catch(e) {}
+      _fireNode = null;
+    }
+  } else if (type === 'hum') {
+    if (!_humGain) {
+      _humGain = _audioCtx.createGain();
+      _humGain.connect(_audioCtx.destination);
+    }
+    _humGain.gain.setValueAtTime(volume * 0.15, _audioCtx.currentTime);
+    
+    if (volume > 0 && !_humController) {
+      _humController = startCosmicHum();
+      _humController.filter.connect(_humGain);
+    } else if (volume === 0 && _humController) {
+      _humController.stop();
+      _humController = null;
+    }
+  }
+}
+
+function handleAmbientChange(type, val) {
+  setAmbientVolume(type, val);
+  const card = document.getElementById(`ambient-${type}`);
+  const status = document.getElementById(`${type}-status`);
+  if (card && status) {
+    const isPlaying = parseInt(val) > 0;
+    card.classList.toggle('active', isPlaying);
+    status.textContent = isPlaying ? `Vol ${val}%` : 'Off';
+  }
+}
+
+function initVisualizer() {
+  initAudioContext();
+  if (!_audioCtx) return;
+  const au = audioEl();
+  if (!au) return;
+  
+  if (!_audioSource) {
+    try {
+      _audioSource = _audioCtx.createMediaElementSource(au);
+      _analyzer = _audioCtx.createAnalyser();
+      _analyzer.fftSize = 64;
+      
+      _audioSource.connect(_analyzer);
+      _analyzer.connect(_audioCtx.destination);
+    } catch (e) {
+      console.error("Visualizer initialization failed:", e);
+    }
+  }
+  
+  if (_analyzer) {
+    startVisualizerLoop();
+  }
+}
+
+function startVisualizerLoop() {
+  if (!_analyzer) return;
+  const bufferLength = _analyzer.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  
+  const bars = document.querySelectorAll('#visualizer-bars .v-bar');
+  if (!bars.length) return;
+
+  function draw() {
+    if (audioEl() && !audioEl().paused) {
+      _visualizerAnimId = requestAnimationFrame(draw);
+      _analyzer.getByteFrequencyData(dataArray);
+      
+      for (let i = 0; i < bars.length; i++) {
+        const value = dataArray[i % bufferLength];
+        const percent = (value / 255) * 100;
+        bars[i].style.height = `${Math.max(6, percent)}%`;
+        bars[i].style.background = `linear-gradient(to top, var(--accent) 0%, var(--accent2) 100%)`;
+      }
+    } else {
+      bars.forEach((bar) => {
+        bar.style.height = '4px';
+        bar.style.background = 'rgba(255,255,255,0.15)';
+      });
+    }
+  }
+  
+  if (_visualizerAnimId) {
+    cancelAnimationFrame(_visualizerAnimId);
+  }
+  draw();
+}
+
+let _zenMode = false;
+let _zenClockInterval = null;
+
+function toggleZenMode() {
+  const layout = document.getElementById('music-layout');
+  const btn = document.getElementById('btn-zen-mode');
+  const clock = document.getElementById('zen-clock');
+  
+  _zenMode = !_zenMode;
+  
+  if (layout) {
+    layout.classList.toggle('zen-active', _zenMode);
+  }
+  
+  if (btn) {
+    btn.textContent = _zenMode ? 'Exit Zen' : '🧘 Zen Mode';
+    btn.classList.toggle('active', _zenMode);
+  }
+
+  if (clock) {
+    clock.style.display = _zenMode ? 'block' : 'none';
+  }
+  
+  if (_zenMode) {
+    startZenClock();
+  } else {
+    stopZenClock();
+  }
+}
+
+function startZenClock() {
+  if (_zenClockInterval) clearInterval(_zenClockInterval);
+  const clock = document.getElementById('zen-clock');
+  
+  function updateTime() {
+    if (!clock) return;
+    const now = new Date();
+    clock.textContent = now.toTimeString().split(' ')[0];
+  }
+  
+  updateTime();
+  _zenClockInterval = setInterval(updateTime, 1000);
+}
+
+function stopZenClock() {
+  if (_zenClockInterval) {
+    clearInterval(_zenClockInterval);
+    _zenClockInterval = null;
+  }
+}
 
 async function loadMusic() {
   try {
     _playlist = await api('/api/music/playlist');
+    _musicPage = 1;
     renderMusicList();
   } catch(e) { toast('Could not load playlist', 'error'); }
 }
@@ -1028,12 +1410,24 @@ function renderMusicList(filter = '') {
   if (!list) return;
 
   const items = _playlist.filter(t => !fl || t.name.toLowerCase().includes(fl));
-  list.innerHTML = items.length
-    ? items.map((t, i) => {
-        const isPlaying = i === _musicIdx;
+  
+  const totalItems = items.length;
+  const totalPages = Math.ceil(totalItems / MUSIC_PAGE_SIZE) || 1;
+  if (_musicPage > totalPages) _musicPage = totalPages;
+  if (_musicPage < 1) _musicPage = 1;
+
+  const startIdx = (_musicPage - 1) * MUSIC_PAGE_SIZE;
+  const pageItems = items.slice(startIdx, startIdx + MUSIC_PAGE_SIZE);
+
+  list.innerHTML = pageItems.length
+    ? pageItems.map((t) => {
+        const absoluteIdx = _playlist.findIndex(x => x.path === t.path);
+        const isPlaying = absoluteIdx === _musicIdx;
         return `
-          <div class="track-card ${isPlaying ? 'active' : ''}" onclick="playTrack(${i})">
-            <div class="track-art">${isPlaying ? '🔊' : '🎵'}</div>
+          <div class="track-card ${isPlaying ? 'active' : ''}" onclick="playTrack(${absoluteIdx})">
+            <div class="track-art" style="background-image: url('${t.art_url}'); background-size: cover; background-position: center; border-radius: 8px;">
+              ${isPlaying ? '<div style="background: rgba(124,58,237,0.6); width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius:8px;">🔊</div>' : ''}
+            </div>
             <div class="track-info">
               <div class="track-name">${t.name}</div>
               <div class="track-count">${t.ext.replace('.','').toUpperCase()} · ${t.play_count} plays</div>
@@ -1045,9 +1439,36 @@ function renderMusicList(filter = '') {
          <div style="font-size:32px; margin-bottom:12px;">🔍</div>
          <div>No matching tracks found</div>
        </div>`;
+
+  renderMusicPagination(totalPages);
 }
 
+function renderMusicPagination(totalPages) {
+  const pagEl = document.getElementById('music-pagination');
+  if (!pagEl) return;
 
+  if (totalPages <= 1) {
+    pagEl.innerHTML = '';
+    pagEl.style.display = 'none';
+    return;
+  }
+  pagEl.style.display = 'flex';
+
+  pagEl.innerHTML = `
+    <button class="btn btn-ghost btn-sm btn-icon pager-btn" onclick="changeMusicPage(${_musicPage - 1})" ${_musicPage === 1 ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <span class="pager-status">Page ${_musicPage} of ${totalPages}</span>
+    <button class="btn btn-ghost btn-sm btn-icon pager-btn" onclick="changeMusicPage(${_musicPage + 1})" ${_musicPage === totalPages ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  `;
+}
+
+function changeMusicPage(p) {
+  _musicPage = p;
+  renderMusicList(document.getElementById('music-search').value);
+}
 
 function jumpToTop() {
   // Try scrolling the grid first
@@ -1065,6 +1486,7 @@ function jumpToTop() {
 }
 
 function filterMusic() {
+  _musicPage = 1;
   renderMusicList(document.getElementById('music-search').value);
 }
 
@@ -1086,11 +1508,21 @@ function playTrack(idx) {
   document.getElementById('player-title').textContent  = track.name;
   document.getElementById('player-artist').textContent = track.ext.replace('.','').toUpperCase();
 
-  // Update Hero Visuals
-  const viz = document.getElementById('hero-visualizer');
-  if (viz) viz.style.display = 'flex';
-  const artIcon = document.getElementById('player-art-icon');
-  if (artIcon) artIcon.textContent = '🔊';
+  // Update Turntable Vinyl label art
+  const vinylArt = document.getElementById('vinyl-art');
+  if (vinylArt) {
+    vinylArt.textContent = '';
+    vinylArt.style.backgroundImage = `url('${track.art_url}')`;
+    vinylArt.style.backgroundSize = 'cover';
+    vinylArt.style.backgroundPosition = 'center';
+  }
+
+  // Update Blurred Ambient Cover Background
+  const bgArt = document.getElementById('deck-ambient-bg');
+  if (bgArt) {
+    bgArt.style.backgroundImage = `url('${track.art_url}')`;
+    bgArt.style.opacity = '0.4';
+  }
 
   renderMusicList(document.getElementById('music-search').value);
   
@@ -1108,7 +1540,10 @@ function playTrack(idx) {
     document.getElementById('cur-time').textContent = fmtTime(au.currentTime);
     document.getElementById('dur-time').textContent = fmtTime(au.duration);
   };
-  au.onplay  = () => setPlayIcon(true);
+  au.onplay  = () => {
+    setPlayIcon(true);
+    initVisualizer();
+  };
   au.onpause = () => setPlayIcon(false);
 }
 
@@ -1120,6 +1555,11 @@ function setPlayIcon(playing) {
   if (mainIcon) mainIcon.innerHTML = svg;
   const dashIcon = document.getElementById('dash-play-icon');
   if (dashIcon) dashIcon.innerHTML = svg;
+
+  const tt = document.getElementById('turntable-container');
+  if (tt) {
+    tt.classList.toggle('playing', playing);
+  }
 }
 
 function togglePlay() {
@@ -1131,7 +1571,9 @@ function togglePlay() {
 function musicNext() {
   if (!_playlist.length) return;
   let next;
-  if (_musicMode === 'shuffle') {
+  const modeSel = document.getElementById('music-mode');
+  const mode = modeSel ? modeSel.value : 'loop';
+  if (mode === 'shuffle') {
     do { next = Math.floor(Math.random() * _playlist.length); } while (next === _musicIdx && _playlist.length > 1);
   } else {
     next = (_musicIdx + 1) % _playlist.length;
@@ -1146,12 +1588,14 @@ function musicPrev() {
 }
 
 function musicAutoNext() {
-  if (_musicMode === 'one') {
+  const modeSel = document.getElementById('music-mode');
+  const mode = modeSel ? modeSel.value : 'loop';
+  if (mode === 'one') {
     const au = audioEl(); au.currentTime = 0; au.play();
   } else { musicNext(); }
 }
 
-function changeMusicMode() { _musicMode = document.getElementById('music-mode').value; }
+function changeMusicMode() { /* Mode is read dynamically now */ }
 function setVolume(v) { audioEl().volume = v / 100; }
 function seekTo(v) { const au = audioEl(); if (au.duration) au.currentTime = (v / 100) * au.duration; }
 function fmtTime(s) { const m = Math.floor(s/60); return `${m}:${String(Math.floor(s%60)).padStart(2,'0')}`; }

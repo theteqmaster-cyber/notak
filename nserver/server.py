@@ -11,7 +11,7 @@ import mimetypes
 import threading
 import datetime
 
-from flask import Flask, jsonify, request, send_file, abort, send_from_directory
+from flask import Flask, jsonify, request, send_file, abort, send_from_directory, Response
 from flask_socketio import SocketIO, emit, disconnect
 from flask_cors import CORS
 
@@ -63,8 +63,15 @@ def create_app():
     # ── Auth Check ────────────────────────────────────────────────────────────
     @app.before_request
     def check_auth():
-        # Exclude static files, shutdown endpoint, and socket.io
-        if request.path.startswith("/static/") or request.path.startswith("/socket.io/") or request.path in ["/", "/icon.png", "/_shutdown"]:
+        # Exclude static files, shutdown endpoint, socket.io, art images, and audio streams
+        # (browsers cannot send custom headers with <img> tags or audio elements)
+        if (
+            request.path.startswith("/static/")
+            or request.path.startswith("/socket.io/")
+            or request.path.startswith("/stream/")
+            or request.path.startswith("/api/music/art")
+            or request.path in ["/", "/icon.png", "/_shutdown"]
+        ):
             return None
         
         # Simple password check via header or query param
@@ -364,7 +371,28 @@ def create_app():
         data         = request.get_json(force=True)
         user_message = data.get("message", "").strip()
         history      = data.get("history", [])
-        system_p     = data.get("system_prompt", "You are Ingracia, a brilliant and friendly AI study assistant for Notak. You MUST be extremely concise and straight to the point. Never over-explain. Do not write long paragraphs unless absolutely necessary. If the user says a simple greeting like 'hi', respond with a very short and simple greeting back. Render clear, structured markdown in your answers. Make sure your information is not biased. If you are in an unknown or unclear state, state it clearly—do not try to give pleasing or invented answers. In mathematics, you must ALWAYS perform a double calculation before giving a response (e.g., calculate once, get the result, calculate again, get the result; if they match, provide the answer to the user. If they do not match, find the error and compare until they are the same). I will not tolerate calculation errors.")
+        system_p     = data.get("system_prompt", """You are Ingracia, a brilliant and warm AI study companion built into Notak — a personal academic hub. You have a naturally curious, encouraging personality and genuinely enjoy helping people learn and think clearly.
+
+Tone & Personality:
+- Be friendly, warm, and human — not robotic or overly formal.
+- You can be a little playful or witty when the mood fits, but always stay helpful.
+- If someone just says "hi" or chats casually, match that energy — a short, warm reply is perfect.
+- Never be curt or make the user feel like they're bothering you.
+
+Response Length:
+- Match your answer length to the complexity of the question.
+- Simple questions → concise, clear answers (2–4 sentences is often enough).
+- Complex or conceptual questions → well-structured explanations with headers or bullet points where helpful.
+- Avoid writing essays when a paragraph will do, but don't truncate explanations that genuinely need depth.
+
+Formatting:
+- Use markdown naturally — bold key terms, use bullet points for lists, code blocks for code.
+- For short conversational replies, skip heavy formatting and just talk naturally.
+
+Accuracy & Honesty:
+- If you're uncertain about something, say so clearly — don't invent answers.
+- Avoid bias; present multiple perspectives where relevant.
+- For mathematics: ALWAYS verify your calculation twice before answering. If the two results don't match, find the error and reconcile them. Calculation accuracy is non-negotiable.""")
 
         if not user_message:
             return jsonify({"error": "Empty message"}), 400
@@ -449,6 +477,88 @@ def create_app():
     # ═════════════════════════════════════════════════════════════════════════
     # MUSIC HUB
     # ═════════════════════════════════════════════════════════════════════════
+    def _generate_default_art(song_name: str) -> (bytes, str):
+        import random
+        from PIL import Image, ImageDraw, ImageFilter
+        state = random.getstate()
+        random.seed(song_name)
+        
+        img = Image.new("RGB", (300, 300), "#08080c")
+        draw = ImageDraw.Draw(img)
+        
+        colors = [
+            (124, 58, 237),  # purple
+            (6, 182, 212),   # cyan
+            (236, 72, 153),  # pink
+            (99, 102, 241),  # indigo
+            (168, 85, 247),  # violet
+            (14, 165, 233),  # light blue
+        ]
+        
+        c1 = random.choice(colors)
+        c2 = random.choice(colors)
+        while c2 == c1:
+            c2 = random.choice(colors)
+            
+        for r in range(250, 0, -3):
+            t = r / 250
+            color = (
+                int(c1[0] * t + c2[0] * (1-t)),
+                int(c1[1] * t + c2[1] * (1-t)),
+                int(c1[2] * t + c2[2] * (1-t))
+            )
+            x_offset = int((1-t) * random.randint(-50, 50))
+            y_offset = int((1-t) * random.randint(-50, 50))
+            draw.ellipse([50 - r/4 + x_offset, 50 - r/4 + y_offset, 250 + r/4 + x_offset, 250 + r/4 + y_offset], fill=color)
+            
+        img = img.filter(ImageFilter.GaussianBlur(radius=24))
+        random.setstate(state)
+        
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=85)
+        return out.getvalue(), "image/jpeg"
+
+    @app.route("/api/music/art")
+    def api_music_art():
+        import urllib.parse
+        raw = request.args.get("path", "")
+        path = urllib.parse.unquote(raw)
+        
+        if not path or not os.path.exists(path):
+            data, mime = _generate_default_art("Default Song")
+            return Response(data, mimetype=mime)
+            
+        ext = os.path.splitext(path)[1].lower()
+        
+        try:
+            if ext == ".mp3":
+                from mutagen.mp3 import MP3
+                from mutagen.id3 import ID3, APIC
+                audio = MP3(path, ID3=ID3)
+                for tag in audio.tags.values():
+                    if isinstance(tag, APIC):
+                        return Response(tag.data, mimetype=tag.mime)
+            elif ext in [".m4a", ".mp4"]:
+                from mutagen.mp4 import MP4
+                audio = MP4(path)
+                if "covr" in audio:
+                    data = audio["covr"][0]
+                    import imghdr
+                    img_type = imghdr.what(None, h=data)
+                    mime = f"image/{img_type}" if img_type else "image/jpeg"
+                    return Response(data, mimetype=mime)
+            elif ext == ".flac":
+                from mutagen.flac import FLAC
+                audio = FLAC(path)
+                if audio.pictures:
+                    pic = audio.pictures[0]
+                    return Response(pic.data, mimetype=pic.mime)
+        except Exception as e:
+            print(f"Error reading artwork: {e}")
+            
+        data, mime = _generate_default_art(os.path.basename(path))
+        return Response(data, mimetype=mime)
+
     @app.route("/api/music/playlist")
     def api_music_playlist():
         playlist_path = os.path.join(os.getcwd(), ".notak_playlist.json")
@@ -486,6 +596,7 @@ def create_app():
                 "last_played": entry.get("last_played", ""),
                 # Web player streams via /stream/music/<encoded_path>
                 "stream_url":  f"/stream/music?path={_encode_path(path)}",
+                "art_url":     f"/api/music/art?path={_encode_path(path)}",
             })
 
         conn.close()

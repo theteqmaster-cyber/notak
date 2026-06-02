@@ -1,0 +1,18 @@
+'data'
+Traceback (most recent call last):
+  File "/home/mphatic/Desktop/notak/nserver/server.py", line 477, in api_ai_tts
+    audio_data = asyncio.run(_generate())
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/mphatic/Desktop/notak/nserver/server.py", line 470, in _generate
+    if chunk.get("data"):
+       ^^^^^^^^^^^^^
+KeyError: 'data'

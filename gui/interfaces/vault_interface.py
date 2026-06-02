@@ -437,6 +437,11 @@ class VaultInterface(QWidget):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
         
+        # Pagination state
+        self._vault_page = 0
+        self._vault_page_size = 20
+        self._filtered_files = []
+        
         # --- 1. COURSE SIDEBAR (Left) ---
         self.course_sidebar = QWidget()
         self.course_sidebar.setFixedWidth(220)
@@ -483,11 +488,10 @@ class VaultInterface(QWidget):
         
         # --- 2. FILES BROWSER (Middle) ---
         self.files_browser = QWidget()
-        self.files_browser.setFixedWidth(400)
         self.files_browser.setStyleSheet("background: rgba(255, 255, 255, 0.01);")
         browser_layout = QVBoxLayout(self.files_browser)
-        browser_layout.setContentsMargins(25, 25, 25, 25)
-        browser_layout.setSpacing(20)
+        browser_layout.setContentsMargins(25, 15, 25, 10)
+        browser_layout.setSpacing(10)
         
         self.header = SubtitleLabel("My Vault")
         self.header.setStyleSheet("font-size: 28px; font-weight: 900; color: white;")
@@ -537,77 +541,40 @@ class VaultInterface(QWidget):
         self.files_layout = QVBoxLayout(self.scroll_widget)
         self.files_layout.setAlignment(Qt.AlignTop)
         self.files_layout.setContentsMargins(0, 0, 10, 0)
-        self.files_layout.setSpacing(12)
+        self.files_layout.setSpacing(8)
         self.scroll_area.setWidget(self.scroll_widget)
         browser_layout.addWidget(self.scroll_area)
-        self.main_layout.addWidget(self.files_browser)
         
-        # --- 3. VIEWER / EDITOR STACK (Right) ---
-        self.content_stack = QStackedWidget()
-        self.content_stack.setStyleSheet("background: rgba(0,0,0,0.1);")
+        # ── Pagination footer ────────────────────────────────────────────
+        pag_row = QHBoxLayout()
+        pag_row.setSpacing(8)
         
-        # Page 0: Empty
-        self.empty_page = QWidget()
-        empty_layout = QVBoxLayout(self.empty_page)
-        empty_layout.setAlignment(Qt.AlignCenter)
-        self.empty_icon = IconWidget(FIF.FOLDER)
-        self.empty_icon.setFixedSize(100, 100)
-        self.empty_icon.setStyleSheet("color: rgba(255, 255, 255, 0.05);")
-        empty_layout.addWidget(self.empty_icon)
-        self.content_stack.addWidget(self.empty_page)
+        self.btn_vault_prev = TransparentPushButton(FIF.LEFT_ARROW, "Prev")
+        self.btn_vault_prev.setFixedHeight(28)
+        self.btn_vault_prev.clicked.connect(self._vault_prev_page)
+        self.btn_vault_prev.setEnabled(False)
+        pag_row.addWidget(self.btn_vault_prev)
         
-        # Page 1: File Info Viewer (PDFs/Images)
-        self.viewer_page = QWidget()
-        viewer_layout = QVBoxLayout(self.viewer_page)
-        viewer_layout.setContentsMargins(50, 50, 50, 50)
+        self.vault_page_label = CaptionLabel("")
+        self.vault_page_label.setStyleSheet("color: #666; min-width: 55px;")
+        self.vault_page_label.setAlignment(Qt.AlignCenter)
+        pag_row.addWidget(self.vault_page_label)
         
-        v_header = QHBoxLayout()
-        v_header.setSpacing(20)
-        title_v = QVBoxLayout()
-        self.v_title = MarqueeLabel("File Title", self)
-        self.v_title.setFixedHeight(45)
-        self.v_title.setStyleSheet("font-size: 28px; font-weight: bold; color: white;")
+        self.btn_vault_next = TransparentPushButton(FIF.RIGHT_ARROW, "Next")
+        self.btn_vault_next.setFixedHeight(28)
+        self.btn_vault_next.clicked.connect(self._vault_next_page)
+        self.btn_vault_next.setEnabled(False)
+        pag_row.addWidget(self.btn_vault_next)
         
-        self.v_info = CaptionLabel("Info")
-        title_v.addWidget(self.v_title)
-        title_v.addWidget(self.v_info)
-        v_header.addLayout(title_v)
-        v_header.addStretch(1)
-        self.btn_edit_note = PushButton(FIF.EDIT, "Edit Note")
-        self.btn_edit_note.clicked.connect(self.edit_current_note)
-        self.btn_edit_note.hide()
-        v_header.addWidget(self.btn_edit_note)
+        pag_row.addStretch(1)
+        self.vault_count_label = CaptionLabel("")
+        self.vault_count_label.setStyleSheet("color: #555;")
+        pag_row.addWidget(self.vault_count_label)
         
-        self.btn_open_external = PrimaryPushButton(FIF.DOCUMENT, "Open Externally")
-        self.btn_open_external.clicked.connect(self.open_current_external)
-        v_header.addWidget(self.btn_open_external)
-        viewer_layout.addLayout(v_header)
+        browser_layout.addLayout(pag_row)
+        self.main_layout.addWidget(self.files_browser, 1)  # stretch=1 fills remaining width
         
-        # Big Preview area
-        self.v_big_preview = QWidget()
-        self.v_big_preview_layout = QVBoxLayout(self.v_big_preview)
-        self.v_big_preview.setStyleSheet("background: rgba(0, 0, 0, 0.2); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);")
-        viewer_layout.addWidget(self.v_big_preview, 1)
-        self.content_stack.addWidget(self.viewer_page)
-        
-        # Page 2: Zen Writer (Notes)
-        self.editor_page = QWidget()
-        editor_layout = QVBoxLayout(self.editor_page)
-        editor_layout.setContentsMargins(0, 0, 0, 0)
-        self.zen_container = QVBoxLayout()
-        
-        top_bar = QHBoxLayout()
-        top_bar.setContentsMargins(30,30,30,0)
-        self.btn_close_editor = TransparentPushButton(FIF.LEFT_ARROW, "Back to Library")
-        self.btn_close_editor.clicked.connect(self.close_zen_editor)
-        top_bar.addWidget(self.btn_close_editor)
-        top_bar.addStretch(1)
-        editor_layout.addLayout(top_bar)
-        editor_layout.addLayout(self.zen_container)
-        self.content_stack.addWidget(self.editor_page)
-        
-        self.main_layout.addWidget(self.content_stack, 1)
-        
+        # State
         self.all_courses_list = []
         self.current_files = []
         self.selected_file_data = None
@@ -659,7 +626,6 @@ class VaultInterface(QWidget):
         # Load files for course
         self.current_files = get_files_for_course(cid)
         self.filter_files()
-        self.content_stack.setCurrentIndex(0) # Reset to empty page
 
     def filter_files(self):
         if self._is_updating: return
@@ -672,8 +638,40 @@ class VaultInterface(QWidget):
             cat_match = (cat == "all" or f['category'] == cat)
             if file_name_match and cat_match:
                 filtered.append(f)
-                
-        self.refresh_list(filtered)
+        
+        # Store and reset page on new filter
+        self._filtered_files = filtered
+        self._vault_page = 0
+        self._render_vault_page()
+
+    def _render_vault_page(self):
+        """Render the current page of filtered files."""
+        ps = self._vault_page_size
+        total = len(self._filtered_files)
+        start = self._vault_page * ps
+        end   = min(start + ps, total)
+        page_files = self._filtered_files[start:end]
+        self.refresh_list(page_files)
+        
+        total_pages = max(1, (total + ps - 1) // ps)
+        self.vault_page_label.setText(f"{self._vault_page + 1}/{total_pages}")
+        self.vault_count_label.setText(f"{start + 1 if total else 0}–{end} of {total}")
+        self.btn_vault_prev.setEnabled(self._vault_page > 0)
+        self.btn_vault_next.setEnabled(self._vault_page < total_pages - 1)
+
+    def _vault_prev_page(self):
+        if self._vault_page > 0:
+            self._vault_page -= 1
+            self._render_vault_page()
+            self.scroll_area.verticalScrollBar().setValue(0)
+
+    def _vault_next_page(self):
+        ps = self._vault_page_size
+        total_pages = max(1, (len(self._filtered_files) + ps - 1) // ps)
+        if self._vault_page < total_pages - 1:
+            self._vault_page += 1
+            self._render_vault_page()
+            self.scroll_area.verticalScrollBar().setValue(0)
 
     def refresh_list(self, files):
         if self._is_updating: return
@@ -703,71 +701,64 @@ class VaultInterface(QWidget):
     def reload_current_course(self):
         cid = self.current_course()
         self.current_files = get_files_for_course(cid)
+        self._filtered_files = self.current_files
+        self._vault_page = 0
         self.filter_files()
         self._preloaded = True
 
     def display_file(self, file_data):
-        self.selected_file_data = file_data
-        cat = file_data['category']
+        """Route .md notes to Quick Note; open images/PDFs/others externally or show info."""
         file_path = file_data['path']
-        
-        self.content_stack.setCurrentIndex(1)
-        basename = os.path.basename(file_path)
-        display_name, suffix = split_filename_for_display(basename)
-        self.v_title.setText(display_name)
-        self.v_info.setText(f"{cat} • {suffix if suffix else 'File'} • {file_data.get('created_at', '')[:10]}")
-        
-        if cat == 'Notes' or cat == 'Text' or file_path.endswith(('.md', '.txt')):
-            self.btn_edit_note.show()
-        else:
-            self.btn_edit_note.hide()
-        
-        self.clear_big_preview()
-        
-        if cat == 'Notes' or cat == 'Text' or file_path.endswith(('.md', '.txt', '.csv')):
-            from qfluentwidgets import TextBrowser
-            
-            text_content = file_data.get('text_content', '')
-            if not text_content.strip():
-                try:
+        cat = file_data['category']
+
+        # ── Route .md notes to Quick Note ──────────────────────────────────
+        if file_path.endswith('.md') and os.path.exists(file_path):
+            try:
+                mw = self.window()
+                if hasattr(mw, 'quickNoteInterface') and hasattr(mw, 'stackedWidget'):
+                    mw.stackedWidget.setCurrentWidget(mw.quickNoteInterface)
+                    qn = mw.quickNoteInterface
+
+                    # Look up db_id from path
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id FROM files WHERE path = ?", (file_path,))
+                    row = cursor.fetchone()
+                    db_id = row[0] if row else None
+                    conn.close()
+
                     with open(file_path, 'r', encoding='utf-8') as f:
-                        text_content = f.read()
-                except Exception as e:
-                    text_content = f"Could not read local file:\n{e}"
-            
-            viewer = TextBrowser()
-            viewer.setStyleSheet("background: transparent; border: none; font-size: 15px; color: #eee; padding: 20px; line-height: 1.6;")
-            
-            if file_path.endswith('.md'):
-                viewer.setMarkdown(text_content)
-            else:
-                viewer.setPlainText(text_content)
-                
-            self.v_big_preview_layout.addWidget(viewer)
-            
-        elif cat == 'Images':
-            img_lbl = QLabel()
-            img_lbl.setAlignment(Qt.AlignCenter)
-            pm = QPixmap(file_path)
-            if not pm.isNull():
-                img_lbl.setPixmap(pm.scaled(600, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            else:
-                img_lbl.setText("Image Corrupted")
-                img_lbl.setStyleSheet("color: #888; font-size: 18px;")
-            self.v_big_preview_layout.addWidget(img_lbl)
-            
-        else:
-            # Just show generic message or partial text
-            msg_lbl = QLabel()
-            content = file_data.get('text_content', 'No full preview available inside app. Open externally.')
-            if not content.strip():
-                content = "Double click the file or click Open Externally to view."
-            
-            msg_lbl.setText(f"Preview:\n\n{content[:800]}...")
-            msg_lbl.setStyleSheet("color: #aaa; font-size: 14px; padding: 20px; text-align: center;")
-            msg_lbl.setAlignment(Qt.AlignCenter)
-            msg_lbl.setWordWrap(True)
-            self.v_big_preview_layout.addWidget(msg_lbl)
+                        content = f.read()
+                    qn.writer.editor.blockSignals(True)
+                    qn.writer.editor.setMarkdown(content)
+                    qn.writer.editor.blockSignals(False)
+                    qn.writer.current_file_path = file_path
+                    qn.writer.db_id = db_id
+                    qn.writer.editor.setReadOnly(False)
+                    qn.writer.status_label.setText("LOADED ✓")
+                    qn.writer.status_label.setStyleSheet(
+                        "color: #0088ff; background: rgba(0, 136, 255, 0.1); "
+                        "padding: 4px 12px; border-radius: 10px;"
+                    )
+                    return
+            except Exception as e:
+                print(f"Quick Note vault redirect error: {e}")
+
+        # ── Images: open externally ─────────────────────────────────────────
+        if cat == 'Images':
+            try:
+                subprocess.Popen(['xdg-open', file_path])
+            except Exception as e:
+                print(f"Error opening image: {e}")
+            return
+
+        # ── PDFs / other files: open externally ────────────────────────────
+        try:
+            subprocess.Popen(['xdg-open', file_path])
+        except Exception as e:
+            print(f"Error opening file externally: {e}")
+
+
 
     def open_current_external(self):
         if self.selected_file_data:
@@ -777,24 +768,11 @@ class VaultInterface(QWidget):
                 print(f"Error opening file externally: {e}")
 
     def edit_current_note(self):
-        if not self.selected_file_data: return
-        cid = self.current_course()
-        if cid == "all":
-            cid = self.selected_file_data.get("course", "Uncategorized")
-            
-        self.content_stack.setCurrentIndex(2)
-        while self.zen_container.count():
-            item = self.zen_container.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-                
-        self.current_zen_editor = ZenWriter(cid, existing_file_data=self.selected_file_data)
-        self.current_zen_editor.saveCompleted.connect(self.reload_current_course)
-        self.zen_container.addWidget(self.current_zen_editor)
+        """Redirect to Quick Note for editing."""
+        pass  # handled by display_file routing
 
     def close_zen_editor(self):
-        self.content_stack.setCurrentIndex(1)
-        self.reload_current_course()
+        pass  # no longer needed
 
     def add_new_course(self):
         name, ok = QInputDialog.getText(self, "Create New Course", "Enter the new course name:")
@@ -806,19 +784,13 @@ class VaultInterface(QWidget):
             self.course_list.setCurrentItem(item)
 
     def take_note(self):
-        cid = self.current_course()
-        if cid == "all": return
-        
-        # Present in Editor Page
-        self.content_stack.setCurrentIndex(2)
-        while self.zen_container.count():
-            item = self.zen_container.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-                
-        self.current_zen_editor = ZenWriter(cid)
-        self.current_zen_editor.saveCompleted.connect(self.reload_current_course)
-        self.zen_container.addWidget(self.current_zen_editor)
+        """Redirect to Quick Note to start a new note."""
+        try:
+            mw = self.window()
+            if hasattr(mw, 'quickNoteInterface') and hasattr(mw, 'stackedWidget'):
+                mw.stackedWidget.setCurrentWidget(mw.quickNoteInterface)
+        except Exception as e:
+            print(f"take_note redirect error: {e}")
 
     def showEvent(self, event):
         super().showEvent(event)

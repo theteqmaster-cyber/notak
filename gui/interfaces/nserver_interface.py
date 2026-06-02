@@ -256,6 +256,7 @@ class NServerInterface(QWidget):
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._refresh_clients)
         # Not started until server is running
+        QTimer.singleShot(1000, self.start_server)
 
     # ── Server lifecycle ───────────────────────────────────────────
     def start_server(self):
