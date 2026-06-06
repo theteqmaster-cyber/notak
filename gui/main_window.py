@@ -19,11 +19,7 @@ from gui.interfaces.notei_interface import NoteiInterface
 from gui.interfaces.recycle_bin_interface import RecycleBinInterface
 from gui.interfaces.search_interface import DeepSearchInterface
 from gui.interfaces.about_interface import AboutInterface
-from gui.interfaces.games_interface import GamesInterface
-from gui.interfaces.radio_interface import RadioInterface
-from gui.interfaces.hydraspace_interface import HydraSpaceInterface
 from gui.interfaces.session_interface import SessionInterface
-from gui.interfaces.nserver_interface import NServerInterface
 from core.database import initialize_db, purge_old_deleted_items, insert_session
 
 class MainWindow(FluentWindow):
@@ -51,11 +47,7 @@ class MainWindow(FluentWindow):
         self.recycleBinInterface = RecycleBinInterface(self)
         self.searchInterface = DeepSearchInterface(self)
         self.aboutInterface = AboutInterface(self)
-        self.gamesInterface = GamesInterface(self)
-        self.radioInterface = RadioInterface(self)
-        self.hydraInterface = HydraSpaceInterface(self)
         self.sessionInterface = SessionInterface(self)
-        self.nserverInterface = NServerInterface(self)
         
         self.sessionInterface.sessionStarted.connect(self.start_session_timer)
         self.sessionInterface.sessionCancelled.connect(self.cancel_session_timer)
@@ -100,14 +92,9 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.calendarInterface, FIF.CALENDAR, 'Study Calendar', NavigationItemPosition.TOP)
         self.addSubInterface(self.sessionInterface, FIF.HISTORY, 'Session', NavigationItemPosition.TOP)
         self.addSubInterface(self.musicInterface, FIF.MUSIC, 'Music Hub', NavigationItemPosition.TOP)
-        self.addSubInterface(self.radioInterface, FIF.WIFI, 'Internet Radio', NavigationItemPosition.TOP)
         self.addSubInterface(self.noteiInterface, FIF.LAYOUT, 'Mboard', NavigationItemPosition.TOP)
-        self.addSubInterface(self.hydraInterface, FIF.GLOBE, 'HydraSpace', NavigationItemPosition.TOP)
         
         self.navigationInterface.addSeparator() # Visual separation for non-study tools
-        
-        self.addSubInterface(self.gamesInterface, FIF.GAME, 'Games Haven', NavigationItemPosition.TOP)
-        self.addSubInterface(self.nserverInterface, FIF.WIFI, 'NServer', NavigationItemPosition.TOP)
         
         self.addSubInterface(self.recycleBinInterface, FIF.DELETE, 'Recycle Bin', NavigationItemPosition.TOP)
         self.addSubInterface(self.aboutInterface, FIF.INFO, 'About Notak', NavigationItemPosition.TOP)
@@ -240,19 +227,8 @@ class MainWindow(FluentWindow):
             # Session
             self.sessionInterface.load_history()
             
-            # Radio
-            self.radioInterface.load_playlist()
-            
-            # HydraSpace
-            self.hydraInterface.load_initial_data()
         except Exception as e:
             print(f"Preloading notice: {e}")
 
     def closeEvent(self, event):
-        """Ensure NServer shuts down cleanly when the app closes."""
-        try:
-            if hasattr(self, 'nserverInterface') and self.nserverInterface._running:
-                self.nserverInterface.stop_server()
-        except Exception:
-            pass
         super().closeEvent(event)

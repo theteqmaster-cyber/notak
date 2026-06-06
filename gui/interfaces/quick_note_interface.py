@@ -158,16 +158,7 @@ class QuickNoteInterface(ScrollArea):
         self.btn_vault.setCursor(Qt.PointingHandCursor)
         self.btn_vault.mousePressEvent = lambda e: self.navigate_to('vaultInterface')
         
-        self.btn_hydra = CardWidget(self.shortcut_card)
-        self.btn_hydra.setFixedSize(110, 75)
-        h_layout = QVBoxLayout(self.btn_hydra)
-        h_layout.addWidget(IconWidget(FIF.IOT), alignment=Qt.AlignCenter) 
-        h_layout.addWidget(CaptionLabel("Hydra Space"), alignment=Qt.AlignCenter)
-        self.btn_hydra.setCursor(Qt.PointingHandCursor)
-        self.btn_hydra.mousePressEvent = lambda e: self.navigate_to('hydraInterface')
-        
         short_h.addWidget(self.btn_vault)
-        short_h.addWidget(self.btn_hydra)
         self.right_col.addWidget(self.shortcut_card)
 
         # 3. Session Widget
@@ -237,39 +228,18 @@ class QuickNoteInterface(ScrollArea):
     def show_settings_menu(self):
         menu = RoundMenu(parent=self.btn_settings)
         
-        gemma_action = Action(FIF.CHAT, "Ask Gemma", self)
-        gemma_action.triggered.connect(self.launch_gemma)
-        
-        ingracia_action = Action(FIF.PEOPLE, "Ask Ingracia", self)
-        ingracia_action.triggered.connect(self.launch_ingracia)
-        
         bg_action = Action(FIF.IMAGE_EXPORT, "Import Inspiration", self)
         bg_action.triggered.connect(self.change_background)
         
         weather_action = Action(FIF.CLOUD, "Weather", self)
         weather_action.triggered.connect(self.show_weather)
         
-        menu.addAction(gemma_action)
-        menu.addAction(ingracia_action)
-        menu.addSeparator()
         menu.addAction(bg_action)
         menu.addAction(weather_action)
         
         menu.exec(self.btn_settings.mapToGlobal(self.btn_settings.rect().bottomLeft()))
 
-    def launch_gemma(self):
-        try:
-            from gui.components.gemma_chat_view import GemmaChatView
-            self.gemma_view = GemmaChatView(parent=self.window())
-            self.gemma_view.show()
-        except: pass
 
-    def launch_ingracia(self):
-        try:
-            from gui.components.ingracia_chat_view import IngraciaChatView
-            self.ingracia_view = IngraciaChatView(parent=self.window())
-            self.ingracia_view.show()
-        except: pass
 
     def change_background(self):
         from PySide6.QtWidgets import QFileDialog

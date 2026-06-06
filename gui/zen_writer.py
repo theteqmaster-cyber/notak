@@ -10,7 +10,7 @@ from qfluentwidgets import TransparentPushButton, FluentIcon as FIF, InfoBar, In
 
 from core.database import insert_file, get_connection
 from core.importer import VAULT_DIR, get_file_hash
-from core.gemini_service import GeminiService
+
 
 class ZenWriter(QWidget):
     # Pass updated note data through signal
@@ -84,10 +84,7 @@ class ZenWriter(QWidget):
         self.btn_print.setToolTip("Print or Export to PDF")
         self.btn_print.clicked.connect(self.export_to_pdf)
         
-        self.btn_fmrt = TransparentPushButton(FIF.EDIT, "fmrt")
-        self.btn_fmrt.setToolTip("AI Format Highlighted Text")
-        self.btn_fmrt.setStyleSheet("color: #a371f7; font-weight: bold;")
-        self.btn_fmrt.clicked.connect(self.format_selected_text)
+
         
         self.toolbar_layout.addWidget(self.btn_bold)
         self.toolbar_layout.addWidget(self.btn_italic)
@@ -97,7 +94,7 @@ class ZenWriter(QWidget):
         self.toolbar_layout.addWidget(self.btn_bullets)
         self.toolbar_layout.addWidget(self.btn_print)
         self.toolbar_layout.addStretch()
-        self.toolbar_layout.addWidget(self.btn_fmrt)
+
         
         self.main_layout.addLayout(self.toolbar_layout)
         
@@ -182,69 +179,7 @@ class ZenWriter(QWidget):
         else:
             cursor.createList(QTextListFormat.ListDisc)
             
-    def format_selected_text(self):
-        cursor = self.editor.textCursor()
-        if not cursor.hasSelection():
-            InfoBar.warning(
-                title="No text selected",
-                content="Please highlight some text first to format it.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                duration=3000,
-                parent=self
-            )
-            return
-            
-        selected_text = cursor.selectedText()
-        # Handle Qt's paragraph separator char replacements
-        selected_text = selected_text.replace('\u2029', '\n').replace('\u2028', '\n')
-        
-        if not selected_text.strip():
-            return
-            
-        self.btn_fmrt.setText("✨ Formatting...")
-        self.btn_fmrt.setEnabled(False)
-        self.editor.setReadOnly(True)
-        self.status_label.setText("AI FORMATTING...")
-        self.status_label.setStyleSheet("color: #a371f7; background: rgba(163, 113, 247, 0.1); padding: 4px 12px; border-radius: 10px;")
-        
-        # Build prompt
-        system_prompt = "You are a professional academic text formatter. Output ONLY the properly formatted text without any conversational filler or introductory sentences."
-        prompt = f"Format the following text into a clean, professional, academic tone. Fix spelling/grammar. Use proper markdown headings, spacing, and bullets where appropriate. Do not change the original meaning.\n\nText:\n{selected_text}"
-        
-        self.active_ai_thread, self.active_ai_worker = GeminiService().get_chat_thread(prompt, system_prompt=system_prompt)
-        self.active_ai_worker.finished.connect(self.on_format_finished)
-        self.active_ai_worker.error.connect(lambda e: self.on_format_finished("", e))
-        self.active_ai_thread.start()
 
-    def on_format_finished(self, formatted_text, error_msg=None):
-        self.btn_fmrt.setText("fmrt")
-        self.btn_fmrt.setEnabled(True)
-        self.editor.setReadOnly(False)
-        self.status_label.setText("EDITING...")
-        self.status_label.setStyleSheet("color: #ffaa00; background: rgba(255, 170, 0, 0.1); padding: 4px 12px; border-radius: 10px;")
-        
-        if error_msg or not formatted_text.strip():
-            InfoBar.error(
-                title="Format Failed",
-                content=error_msg or "AI returned an empty response.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                duration=4000,
-                parent=self
-            )
-            return
-            
-        # Replace selected text with the formatted text
-        cursor = self.editor.textCursor()
-        # Ensure we still have a selection (should be the same since we made it read-only)
-        if cursor.hasSelection():
-            cursor.removeSelectedText()
-        # Insert as markdown to render the formatting
-        cursor.insertMarkdown(formatted_text.strip())
-        self.auto_save()
         
     def on_text_changed(self):
         self.status_label.setText("EDITING...")
@@ -257,32 +192,7 @@ class ZenWriter(QWidget):
         if not text:
             return
             
-        if self.is_cloud:
-            self.save_to_cloud(markdown_text, text)
-        else:
-            self.save_to_local(markdown_text, text)
-
-    def save_to_cloud(self, markdown_text, plain_text):
-        from core.supabase_service import SupabaseService
-        self.status_label.setText("SYNCING...")
-        first_line = plain_text.split('\n')[0][:100]
-        
-        try:
-            success = SupabaseService().update_note(self.cloud_data['id'], first_line, markdown_text)
-            if success:
-                self.status_label.setText("CLOUD SYNCED ✓")
-                self.status_label.setStyleSheet("color: #00ff88; background: rgba(0, 255, 136, 0.1); padding: 4px 12px; border-radius: 10px;")
-                
-                # Update local data reflection
-                self.cloud_data['title'] = first_line
-                self.cloud_data['content'] = markdown_text
-                # Force signal with updated payload for real-time dashboard patching
-                self.saveCompleted.emit(self.cloud_data)
-            else:
-                self.status_label.setText("SYNC FAILED")
-                self.status_label.setStyleSheet("color: #ff4444; background: rgba(255, 68, 68, 0.1); padding: 4px 12px; border-radius: 10px;")
-        except:
-            self.status_label.setText("OFFLINE")
+        self.save_to_local(markdown_text, text)
 
     def save_to_local(self, markdown_text, plain_text):
         first_line = plain_text.split('\n')[0][:50]
@@ -322,9 +232,7 @@ class ZenWriter(QWidget):
 
     def export_to_pdf(self):
         title = "Untitled Note"
-        if self.is_cloud and self.cloud_data:
-            title = self.cloud_data.get('title', title)
-        elif self.current_file_path:
+        if self.current_file_path:
             title = os.path.basename(self.current_file_path).split('_')[0]
 
         safe_title = re.sub(r'[^a-zA-Z0-9_\-\s]', '', title).strip()

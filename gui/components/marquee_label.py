@@ -10,6 +10,8 @@ class MarqueeLabel(QLabel):
         self.scroll_speed = 1 # pixels per frame
         self.gap = 50 # space between loops
         self.alignment_flags = Qt.AlignLeft | Qt.AlignVCenter
+        self._is_hovered = False
+        self.always_scroll = False
         
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_offset)
@@ -32,12 +34,32 @@ class MarqueeLabel(QLabel):
 
     def check_overflow(self):
         metrics = QFontMetrics(self.font())
-        if metrics.horizontalAdvance(self.text_content) > self.width() > 0:
+        if self.isVisible() and (self.always_scroll or self._is_hovered) and metrics.horizontalAdvance(self.text_content) > self.width() > 0:
             if not self.timer.isActive():
                 self.timer.start()
         else:
             self.timer.stop()
             self.offset = 0
+            self.update()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.check_overflow()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.timer.stop()
+        self.offset = 0
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        self._is_hovered = True
+        self.check_overflow()
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        self._is_hovered = False
+        self.check_overflow()
 
     def update_offset(self):
         metrics = QFontMetrics(self.font())

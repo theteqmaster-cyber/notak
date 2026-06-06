@@ -105,6 +105,7 @@ class MiniMusicCard(CardWidget):
         self.marquee = MarqueeLabel("Now Playing: None")
         self.marquee.setFixedWidth(150)
         self.marquee.setStyleSheet("color: #00ffaa; font-weight: bold; font-size: 11px;")
+        self.marquee.always_scroll = True
         self.layout.addWidget(self.marquee, alignment=Qt.AlignCenter)
         
         controls = QHBoxLayout()
@@ -515,10 +516,7 @@ class VaultInterface(QWidget):
         self.btn_new_note.clicked.connect(self.take_note)
         actions_layout.addWidget(self.btn_new_note)
         
-        self.btn_ingracia = PrimaryPushButton(FIF.PEOPLE, "Ask Ingracia")
-        self.btn_ingracia.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #8a2be2, stop:1 #ffd700); color: white;")
-        self.btn_ingracia.clicked.connect(self.launch_ingracia_with_context)
-        actions_layout.addWidget(self.btn_ingracia)
+
         browser_layout.addLayout(actions_layout)
 
         pivot_h = QHBoxLayout()
@@ -852,26 +850,4 @@ class VaultInterface(QWidget):
                 parent=self
             )
 
-    def launch_ingracia_with_context(self):
-        course = self.current_course()
-        if course == "all": course = "Inbox"
-        
-        files = self.current_files
-        recent_files = files[:8]
-        
-        metadata_lines = [f"METADATA_REASONING_MODE: {course}"]
-        for n in recent_files:
-            filename = os.path.basename(n['path'])
-            date_str = n.get('created_at', 'Unknown Date')
-            metadata_lines.append(f"- File: {filename} (Modified: {date_str})")
-        
-        metadata_block = "\n".join(metadata_lines)
-        
-        from gui.components.ingracia_chat_view import IngraciaChatView
-        self.chat_overlay = IngraciaChatView(course_name=course, context_text=metadata_block, parent=self.window())
-        self.chat_overlay.closed.connect(self.chat_overlay.close)
-        self.chat_overlay.resize(500, 750)
-        
-        geo = self.window().geometry()
-        self.chat_overlay.move(geo.center() - self.chat_overlay.rect().center())
-        self.chat_overlay.show()
+
